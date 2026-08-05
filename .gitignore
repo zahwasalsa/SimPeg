@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.local
+logs/*.log
+src/storage/uploads/*
+src/storage/avatars/*
+src/storage/documents/*
+src/storage/temp/*
+!src/storage/**/.gitkeep
+coverage/
+.DS_Store
+Thumbs.db

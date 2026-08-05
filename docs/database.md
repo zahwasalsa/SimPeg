@@ -1,0 +1,749 @@
+# Database Design
+## Sistem Pengembangan Karier dan Kinerja Pegawai
+
+Version : 1.0
+
+Status : Active
+
+Database :
+PostgreSQL (Supabase)
+
+---
+
+# 1. Tujuan
+
+Dokumen ini menjadi acuan resmi seluruh desain database.
+
+Seluruh perubahan struktur database harus mengacu pada dokumen ini.
+
+Developer maupun AI Assistant tidak diperbolehkan membuat tabel baru tanpa memperbarui dokumen ini.
+
+---
+
+# 2. Database Engine
+
+Database menggunakan
+
+PostgreSQL
+
+yang dikelola melalui
+
+Supabase.
+
+Seluruh tabel menggunakan UTF-8.
+
+Timezone menggunakan UTC.
+
+---
+
+# 3. Design Principles
+
+Database dirancang berdasarkan prinsip:
+
+- Third Normal Form (3NF)
+- Referential Integrity
+- Soft Delete
+- Audit Trail
+- Consistent Naming
+- Scalability
+
+Tidak diperbolehkan melakukan denormalisasi tanpa alasan yang jelas.
+
+---
+
+# 4. Naming Convention
+
+Table
+
+snake_case
+
+Contoh
+
+pegawai
+
+unit_kerja
+
+roadmap_karier
+
+dokumen_version
+
+Column
+
+snake_case
+
+Contoh
+
+full_name
+
+created_at
+
+updated_at
+
+Foreign Key
+
+nama_tabel_id
+
+Contoh
+
+pegawai_id
+
+jabatan_id
+
+role_id
+
+---
+
+# 5. Standard Columns
+
+Setiap tabel wajib memiliki
+
+id
+
+created_at
+
+updated_at
+
+Apabila diperlukan
+
+deleted_at
+
+created_by
+
+updated_by
+
+deleted_by
+
+---
+
+# 6. Primary Keys
+
+Seluruh Primary Key menggunakan
+
+UUID
+
+Contoh
+
+id UUID PRIMARY KEY
+
+---
+
+# 7. Foreign Keys
+
+Semua relasi wajib menggunakan Foreign Key.
+
+Tidak diperbolehkan menyimpan relasi dalam bentuk text.
+
+---
+
+# 8. Soft Delete
+
+Data tidak dihapus permanen.
+
+Gunakan
+
+deleted_at
+
+untuk menandai data yang telah dihapus.
+
+---
+
+# 9. Audit Trail
+
+Aktivitas penting disimpan pada
+
+activity_logs
+
+Minimal mencatat
+
+- Login
+- Logout
+- Insert
+- Update
+- Delete
+- Approval
+
+---
+
+# 10. Master Tables
+
+Master data relatif jarang berubah.
+
+## roles
+
+Menyimpan role pengguna.
+
+Contoh
+
+Administrator
+
+Bagian SDM
+
+Dosen
+
+Tenaga Kependidikan
+
+Pimpinan
+
+---
+
+## permissions
+
+Hak akses sistem.
+
+---
+
+## role_permissions
+
+Relasi role dan permission.
+
+---
+
+## unit_kerja
+
+Daftar unit kerja.
+
+---
+
+## jabatan
+
+Daftar jabatan.
+
+---
+
+## status_kepegawaian
+
+Status pegawai.
+
+---
+
+## kategori_dokumen
+
+Kategori dokumen.
+
+---
+
+## jenis_sertifikasi
+
+Master sertifikasi.
+
+---
+
+## jenis_pelatihan
+
+Master pelatihan.
+
+---
+
+# 11. Core Tables
+
+## users
+
+Digunakan untuk autentikasi.
+
+Kolom
+
+- id
+- email
+- password_hash
+- role_id
+- is_active
+- last_login
+- created_at
+- updated_at
+
+---
+
+## pegawai
+
+Menyimpan identitas pegawai.
+
+Kolom
+
+- id
+- user_id
+- nip
+- nama
+- tempat_lahir
+- tanggal_lahir
+- jenis_kelamin
+- alamat
+- telepon
+- unit_kerja_id
+- jabatan_id
+- status_kepegawaian_id
+- created_at
+- updated_at
+
+---
+
+## profil_pendidikan
+
+Riwayat pendidikan.
+
+---
+
+## riwayat_jabatan
+
+Riwayat jabatan pegawai.
+
+---
+
+# 12. Document Management
+
+## dokumen
+
+Metadata dokumen.
+
+Kolom
+
+- id
+- pegawai_id
+- kategori_dokumen_id
+- nama_dokumen
+- file_path
+- bucket
+- mime_type
+- ukuran_file
+- versi_aktif
+- created_at
+
+---
+
+## dokumen_version
+
+Versi dokumen.
+
+Relasi
+
+dokumen
+
+1
+
+↓
+
+N
+
+dokumen_version
+
+---
+
+# 13. KPI
+
+## kpi
+
+Target KPI.
+
+---
+
+## kpi_detail
+
+Detail indikator.
+
+---
+
+## kpi_progress
+
+Riwayat capaian.
+
+---
+
+# 14. Roadmap Karier
+
+## roadmap_karier
+
+Posisi saat ini.
+
+Target jabatan.
+
+Target promosi.
+
+Deadline.
+
+Status.
+
+---
+
+# 15. Penelitian
+
+## penelitian
+
+Target penelitian.
+
+---
+
+## publikasi
+
+Publikasi penelitian.
+
+---
+
+## hki
+
+Hak Kekayaan Intelektual.
+
+---
+
+# 16. Sertifikasi
+
+## sertifikasi
+
+Data sertifikat.
+
+Tanggal berlaku.
+
+Tanggal berakhir.
+
+Reminder.
+
+---
+
+# 17. Pelatihan
+
+## pelatihan
+
+Riwayat pelatihan.
+
+Sertifikat.
+
+Penyelenggara.
+
+Tanggal.
+
+---
+
+# 18. Layanan Administrasi
+
+## layanan
+
+Jenis layanan.
+
+---
+
+## pengajuan_layanan
+
+Data pengajuan.
+
+Status.
+
+Tanggal.
+
+Lampiran.
+
+---
+
+## approval
+
+Approval berjenjang.
+
+Level.
+
+Status.
+
+Approver.
+
+Tanggal.
+
+Catatan.
+
+---
+
+# 19. Notification
+
+## notifications
+
+Notifikasi sistem.
+
+Email.
+
+Reminder.
+
+Approval.
+
+Expired Document.
+
+Expired Certification.
+
+---
+
+# 20. Activity Logs
+
+## activity_logs
+
+Audit Trail.
+
+User.
+
+Action.
+
+Table.
+
+Record ID.
+
+IP Address.
+
+User Agent.
+
+Timestamp.
+
+---
+
+# 21. Relationship
+
+users
+
+1
+
+↓
+
+1
+
+pegawai
+
+pegawai
+
+1
+
+↓
+
+N
+
+dokumen
+
+pegawai
+
+1
+
+↓
+
+N
+
+sertifikasi
+
+pegawai
+
+1
+
+↓
+
+N
+
+pelatihan
+
+pegawai
+
+1
+
+↓
+
+N
+
+kpi
+
+pegawai
+
+1
+
+↓
+
+N
+
+penelitian
+
+pegawai
+
+1
+
+↓
+
+N
+
+roadmap_karier
+
+pegawai
+
+1
+
+↓
+
+N
+
+pengajuan_layanan
+
+pengajuan_layanan
+
+1
+
+↓
+
+N
+
+approval
+
+dokumen
+
+1
+
+↓
+
+N
+
+dokumen_version
+
+roles
+
+1
+
+↓
+
+N
+
+users
+
+roles
+
+N
+
+↓
+
+N
+
+permissions
+
+---
+
+# 22. Indexing
+
+Seluruh kolom berikut wajib memiliki index.
+
+email
+
+nip
+
+pegawai_id
+
+user_id
+
+role_id
+
+created_at
+
+status
+
+---
+
+# 23. Constraints
+
+Email unik.
+
+NIP unik.
+
+Role wajib ada.
+
+Foreign Key wajib valid.
+
+Dokumen tidak boleh tanpa pegawai.
+
+Approval tidak boleh tanpa pengajuan.
+
+---
+
+# 24. Storage Rules
+
+File fisik berada pada
+
+Supabase Storage.
+
+Database hanya menyimpan
+
+- path
+- bucket
+- mime_type
+- file_size
+
+---
+
+# 25. Migration Rules
+
+Seluruh perubahan database menggunakan migration SQL.
+
+Migration bersifat immutable.
+
+Tidak diperbolehkan mengubah migration lama.
+
+---
+
+# 26. Seed Data
+
+Seed minimal
+
+Roles
+
+Permissions
+
+Unit Kerja
+
+Jabatan
+
+Kategori Dokumen
+
+Jenis Sertifikasi
+
+Jenis Pelatihan
+
+Administrator
+
+---
+
+# 27. Backup
+
+Backup dilakukan otomatis.
+
+Backup database terpisah dari Storage.
+
+---
+
+# 28. Security
+
+Seluruh tabel menggunakan
+
+Row Level Security (RLS)
+
+sesuai role.
+
+Sensitive data hanya dapat diakses role tertentu.
+
+---
+
+# 29. Future Tables
+
+Penambahan tabel harus memenuhi:
+
+- memiliki Primary Key
+- memiliki created_at
+- memiliki updated_at
+- memiliki Foreign Key bila diperlukan
+- terdokumentasi pada database.md
+
+---
+
+# 30. Definition of Done
+
+Database dianggap selesai apabila:
+
+✔ Seluruh tabel terdokumentasi
+
+✔ Seluruh relasi terdokumentasi
+
+✔ Migration tersedia
+
+✔ Seed tersedia
+
+✔ Foreign Key lengkap
+
+✔ Index lengkap
+
+✔ Constraint lengkap
+
+✔ RLS diterapkan
+
+✔ Tidak ada duplikasi data

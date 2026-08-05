@@ -1,0 +1,948 @@
+# API Specification
+## Sistem Pengembangan Karier dan Kinerja Pegawai
+
+Version : 1.0
+
+Status : Active
+
+Base URL
+
+/api/v1
+
+---
+
+# 1. Tujuan
+
+Dokumen ini mendefinisikan seluruh REST API yang digunakan oleh sistem.
+
+Seluruh komunikasi antara frontend dan backend wajib menggunakan endpoint yang terdokumentasi pada dokumen ini.
+
+Perubahan endpoint harus memperbarui dokumen ini.
+
+---
+
+# 2. General Rules
+
+Protocol
+
+HTTPS
+
+Format
+
+JSON
+
+Authentication
+
+Bearer Token (JWT)
+
+Response Type
+
+application/json
+
+Timezone
+
+UTC
+
+Encoding
+
+UTF-8
+
+---
+
+# 3. Response Format
+
+Success
+
+{
+    "success": true,
+    "message": "",
+    "data": {}
+}
+
+Error
+
+{
+    "success": false,
+    "message": "",
+    "errors": {}
+}
+
+Pagination
+
+{
+    "success": true,
+    "message": "",
+    "data": [],
+    "pagination": {
+        "page": 1,
+        "limit": 10,
+        "total": 100,
+        "total_pages": 10
+    }
+}
+
+---
+
+# 4. Authentication
+
+POST
+
+/auth/login
+
+Login
+
+---
+
+POST
+
+/auth/logout
+
+Logout
+
+---
+
+POST
+
+/auth/refresh-token
+
+Refresh JWT
+
+---
+
+GET
+
+/auth/me
+
+Current User
+
+---
+
+PUT
+
+/auth/change-password
+
+Ganti Password
+
+---
+
+# 5. Dashboard
+
+GET
+
+/dashboard
+
+Dashboard Summary
+
+---
+
+GET
+
+/dashboard/activity
+
+Recent Activity
+
+---
+
+GET
+
+/dashboard/reminders
+
+Reminder
+
+---
+
+GET
+
+/dashboard/statistics
+
+Dashboard Statistics
+
+---
+
+# 6. Pegawai
+
+GET
+
+/employees
+
+List Pegawai
+
+---
+
+GET
+
+/employees/{id}
+
+Detail Pegawai
+
+---
+
+POST
+
+/employees
+
+Tambah Pegawai
+
+---
+
+PUT
+
+/employees/{id}
+
+Update Pegawai
+
+---
+
+DELETE
+
+/employees/{id}
+
+Soft Delete Pegawai
+
+---
+
+GET
+
+/employees/{id}/profile
+
+Profil Pegawai
+
+---
+
+PUT
+
+/employees/{id}/profile
+
+Update Profil
+
+---
+
+# 7. Unit Kerja
+
+GET
+
+/work-units
+
+---
+
+POST
+
+/work-units
+
+---
+
+PUT
+
+/work-units/{id}
+
+---
+
+DELETE
+
+/work-units/{id}
+
+---
+
+# 8. Jabatan
+
+GET
+
+/positions
+
+---
+
+POST
+
+/positions
+
+---
+
+PUT
+
+/positions/{id}
+
+---
+
+DELETE
+
+/positions/{id}
+
+---
+
+# 9. Dokumen
+
+GET
+
+/documents
+
+Daftar Dokumen
+
+---
+
+GET
+
+/documents/{id}
+
+Detail Dokumen
+
+---
+
+POST
+
+/documents
+
+Upload Dokumen
+
+---
+
+PUT
+
+/documents/{id}
+
+Update Metadata
+
+---
+
+DELETE
+
+/documents/{id}
+
+Soft Delete
+
+---
+
+GET
+
+/documents/{id}/versions
+
+Riwayat Versi
+
+---
+
+POST
+
+/documents/{id}/versions
+
+Upload Versi Baru
+
+---
+
+GET
+
+/document-categories
+
+Kategori Dokumen
+
+---
+
+# 10. KPI
+
+GET
+
+/kpis
+
+---
+
+GET
+
+/kpis/{id}
+
+---
+
+POST
+
+/kpis
+
+---
+
+PUT
+
+/kpis/{id}
+
+---
+
+DELETE
+
+/kpis/{id}
+
+---
+
+GET
+
+/kpis/{id}/progress
+
+---
+
+POST
+
+/kpis/{id}/progress
+
+---
+
+# 11. Roadmap Karier
+
+GET
+
+/career-roadmaps
+
+---
+
+GET
+
+/career-roadmaps/{id}
+
+---
+
+POST
+
+/career-roadmaps
+
+---
+
+PUT
+
+/career-roadmaps/{id}
+
+---
+
+DELETE
+
+/career-roadmaps/{id}
+
+---
+
+# 12. Penelitian
+
+GET
+
+/research
+
+---
+
+GET
+
+/research/{id}
+
+---
+
+POST
+
+/research
+
+---
+
+PUT
+
+/research/{id}
+
+---
+
+DELETE
+
+/research/{id}
+
+---
+
+GET
+
+/research/{id}/publications
+
+---
+
+POST
+
+/research/{id}/publications
+
+---
+
+GET
+
+/research/{id}/intellectual-properties
+
+---
+
+POST
+
+/research/{id}/intellectual-properties
+
+---
+
+# 13. Sertifikasi
+
+GET
+
+/certifications
+
+---
+
+GET
+
+/certifications/{id}
+
+---
+
+POST
+
+/certifications
+
+---
+
+PUT
+
+/certifications/{id}
+
+---
+
+DELETE
+
+/certifications/{id}
+
+---
+
+# 14. Pelatihan
+
+GET
+
+/trainings
+
+---
+
+GET
+
+/trainings/{id}
+
+---
+
+POST
+
+/trainings
+
+---
+
+PUT
+
+/trainings/{id}
+
+---
+
+DELETE
+
+/trainings/{id}
+
+---
+
+# 15. Layanan Administrasi
+
+GET
+
+/services
+
+Jenis layanan
+
+---
+
+POST
+
+/service-requests
+
+Ajukan layanan
+
+---
+
+GET
+
+/service-requests
+
+Daftar Pengajuan
+
+---
+
+GET
+
+/service-requests/{id}
+
+Detail Pengajuan
+
+---
+
+PUT
+
+/service-requests/{id}
+
+Update Pengajuan
+
+---
+
+DELETE
+
+/service-requests/{id}
+
+Batalkan Pengajuan
+
+---
+
+# 16. Approval
+
+GET
+
+/approvals
+
+---
+
+GET
+
+/approvals/{id}
+
+---
+
+PUT
+
+/approvals/{id}/approve
+
+Approve
+
+---
+
+PUT
+
+/approvals/{id}/reject
+
+Reject
+
+---
+
+# 17. Sertifikasi & Pelatihan Reminder
+
+GET
+
+/reminders
+
+---
+
+GET
+
+/reminders/documents
+
+---
+
+GET
+
+/reminders/certifications
+
+---
+
+# 18. Notification
+
+GET
+
+/notifications
+
+---
+
+PUT
+
+/notifications/{id}/read
+
+---
+
+PUT
+
+/notifications/read-all
+
+---
+
+DELETE
+
+/notifications/{id}
+
+---
+
+# 19. Activity Logs
+
+GET
+
+/activity-logs
+
+Administrator only
+
+---
+
+GET
+
+/activity-logs/{id}
+
+---
+
+# 20. Users
+
+GET
+
+/users
+
+---
+
+GET
+
+/users/{id}
+
+---
+
+POST
+
+/users
+
+---
+
+PUT
+
+/users/{id}
+
+---
+
+DELETE
+
+/users/{id}
+
+---
+
+# 21. Roles
+
+GET
+
+/roles
+
+---
+
+POST
+
+/roles
+
+---
+
+PUT
+
+/roles/{id}
+
+---
+
+DELETE
+
+/roles/{id}
+
+---
+
+# 22. Permissions
+
+GET
+
+/permissions
+
+---
+
+POST
+
+/permissions
+
+---
+
+PUT
+
+/permissions/{id}
+
+---
+
+DELETE
+
+/permissions/{id}
+
+---
+
+# 23. Master Data
+
+GET
+
+/master/document-categories
+
+---
+
+GET
+
+/master/work-units
+
+---
+
+GET
+
+/master/positions
+
+---
+
+GET
+
+/master/employment-status
+
+---
+
+GET
+
+/master/certification-types
+
+---
+
+GET
+
+/master/training-types
+
+---
+
+# 24. Upload Rules
+
+Content-Type
+
+multipart/form-data
+
+Supported
+
+PDF
+
+DOC
+
+DOCX
+
+PNG
+
+JPG
+
+JPEG
+
+Maximum Size
+
+Ditentukan pada konfigurasi backend
+
+Storage
+
+Supabase Storage
+
+---
+
+# 25. Authentication Rules
+
+Public Endpoint
+
+/auth/login
+
+Private Endpoint
+
+Semua endpoint selain login.
+
+Authorization Header
+
+Bearer <access_token>
+
+---
+
+# 26. HTTP Status
+
+200 OK
+
+201 Created
+
+204 No Content
+
+400 Bad Request
+
+401 Unauthorized
+
+403 Forbidden
+
+404 Not Found
+
+409 Conflict
+
+422 Validation Error
+
+500 Internal Server Error
+
+---
+
+# 27. API Versioning
+
+Semua endpoint menggunakan
+
+/api/v1/
+
+Perubahan breaking change menggunakan
+
+/api/v2/
+
+---
+
+# 28. Error Code
+
+AUTH001
+
+Token Invalid
+
+AUTH002
+
+Token Expired
+
+AUTH003
+
+Unauthorized
+
+EMP001
+
+Pegawai Tidak Ditemukan
+
+DOC001
+
+Dokumen Tidak Ditemukan
+
+KPI001
+
+KPI Tidak Ditemukan
+
+SRV001
+
+Pengajuan Tidak Ditemukan
+
+NOTIF001
+
+Notifikasi Tidak Ditemukan
+
+---
+
+# 29. API Documentation
+
+Seluruh endpoint harus didokumentasikan menggunakan
+
+OpenAPI 3.1
+
+Swagger UI
+
+Perubahan endpoint wajib memperbarui dokumentasi.
+
+---
+
+# 30. Definition of Done
+
+Sebuah endpoint dianggap selesai apabila:
+
+✔ Endpoint tersedia
+
+✔ Request tervalidasi
+
+✔ Response sesuai standar
+
+✔ Error handling tersedia
+
+✔ Authorization tersedia
+
+✔ Logging tersedia
+
+✔ Swagger diperbarui
+
+✔ Unit Test lulus
+
+✔ Integration Test lulus

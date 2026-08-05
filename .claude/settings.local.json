@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm ls *)",
+      "Bash(node -e \"console.log\\(require\\('eslint/package.json'\\).version\\)\")",
+      "Bash(npm install *)",
+      "Bash(npx eslint *)",
+      "Bash(npx prettier *)",
+      "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process -Filter \"Name='\\\\''node.exe'\\\\''\" | Where-Object { $_.CommandLine -like '\\\\''*src\\\\server.js*'\\\\'' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }')",
+      "Bash(curl -s -m 2 http://localhost:3000/health)",
+      "Bash(powershell -NoProfile -Command \"Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess\")",
+      "Bash(powershell -NoProfile -Command \"Stop-Process -Id 9200 -Force\")",
+      "Bash(echo \"exit code: $?\")",
+      "Bash(ls -la \"/d/\" 2>&1 | head -20; echo \"---\"; ls -la \"/d/sinpug\" 2>&1)"
+    ]
+  }
+}
