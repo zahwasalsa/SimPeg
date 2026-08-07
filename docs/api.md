@@ -432,6 +432,122 @@ DELETE
 
 ---
 
+# 8a. Absensi
+
+Diimplementasikan pada Phase 5 (Absensi Management). Path aktual `/absensi`. Seluruh endpoint memerlukan
+`Authorization: Bearer <accessToken>`. Role tidak pernah dicek di Controller — gate akses ada di
+`authMiddleware`/`authorize`/`absensi.authorize.js`, scope data (semua vs milik sendiri) diputuskan di
+Service.
+
+`:id` pada endpoint di bawah adalah `absensi.id`, bukan `pegawai.id`.
+
+Tidak ada endpoint `DELETE`. Koreksi data hanya lewat `PATCH` (khusus admin/HRD).
+
+Response tidak pernah menyertakan data dari tabel `users`/`pegawai` di luar `pegawaiId`, apalagi
+password/token/secret.
+
+---
+
+## GET /absensi
+
+Query params: `page`, `limit`, `pegawaiId` (UUID, hanya efektif untuk admin/hrd), `tanggal`
+(`YYYY-MM-DD`), `status` (`hadir`\|`izin`\|`sakit`\|`alpha`\|`cuti`)
+
+- **Admin/HRD**: melihat seluruh data, `pegawaiId` di query dipakai sebagai filter opsional.
+- **Pegawai/Pimpinan**: parameter `pegawaiId` dari query **diabaikan** — hasil selalu otomatis di-scope
+  ke pegawai milik akun yang login. Jika akun belum punya profil pegawai (mis. pimpinan tanpa data
+  kepegawaian), hasilnya `200` dengan `data: []`, bukan error.
+
+Response 200 — format pagination standar (lihat Bagian 3).
+
+Error: `401` tanpa token
+
+---
+
+## GET /absensi/{id}
+
+**Admin/HRD** bisa lihat siapa pun. **Pegawai/Pimpinan** hanya bisa lihat miliknya sendiri (dicek lewat
+`absensi.pegawai_id` yang dicocokkan ke pegawai milik `req.user.id`, bukan perbandingan `:id` langsung).
+
+Response 200
+
+```json
+{
+  "success": true,
+  "message": "Detail absensi",
+  "data": {
+    "id": "uuid", "pegawaiId": "uuid", "tanggal": "2026-08-07",
+    "jamMasuk": "08:00:00", "jamKeluar": "17:00:00", "status": "hadir",
+    "keterangan": null, "createdAt": "...", "updatedAt": "..."
+  }
+}
+```
+
+Error: `401`, `403` bukan admin/HRD dan bukan pemilik, `404` tidak ditemukan, `422` id bukan UUID
+
+---
+
+## POST /absensi
+
+Perilaku **berbeda tergantung role** — endpoint yang sama, semantik berbeda:
+
+### Sebagai admin/HRD (strict create)
+
+`pegawaiId` **wajib** dikirim di body. Selalu murni membuat baris baru.
+
+```json
+{ "pegawaiId": "uuid", "tanggal": "2026-08-07", "jamMasuk": "08:00", "status": "hadir" }
+```
+
+Response `201`. Error `409` jika kombinasi `pegawaiId` + `tanggal` sudah ada.
+
+### Sebagai pegawai (check-in / check-out)
+
+`pegawaiId` **tidak boleh dikirim sama sekali** — identitas selalu diresolusi backend dari
+`req.user.id` (JWT) → dicocokkan ke `pegawai.user_id` miliknya sendiri. Mengirim `pegawaiId` apa pun
+(termasuk milik sendiri) akan ditolak `422` — secara desain pegawai **tidak mungkin** membuat absensi
+atas nama pegawai lain.
+
+```json
+{ "tanggal": "2026-08-07", "jamMasuk": "08:00" }
+```
+
+Perilaku berdasarkan state baris `(pegawai_id, tanggal)` hari itu:
+
+| Kondisi saat ini | Aksi | Response |
+|---|---|---|
+| Belum ada baris | **Check-in** — buat baris baru | `201` |
+| Ada baris, `jamKeluar` masih kosong | **Check-out** — update `jamKeluar` (dan field lain yang dikirim) pada baris yang sama | `200` |
+| Ada baris, `jamKeluar` sudah terisi | Absensi hari itu sudah lengkap | `409` |
+
+`pimpinan` selalu `403` untuk POST.
+
+Error umum: `401`, `403` (pimpinan, atau `pegawaiId` tanpa role admin/hrd yang valid), `404` (`pegawaiId`
+tidak ditemukan — khusus admin/hrd, atau profil pegawai milik sendiri tidak ditemukan — khusus pegawai),
+`422` (input tidak valid, `jamKeluar < jamMasuk`, atau `pegawaiId` dikirim oleh role pegawai)
+
+---
+
+## PATCH /absensi/{id}
+
+**Admin/HRD only** — pegawai tidak punya akses sama sekali ke endpoint ini, termasuk untuk data miliknya
+sendiri (`403`).
+
+`pegawaiId` **tidak boleh** dikirim di body (immutable, `422` jika ada). Field lain (`tanggal`,
+`jamMasuk`, `jamKeluar`, `status`, `keterangan`) boleh diperbarui sebagian.
+
+```json
+{ "status": "sakit", "keterangan": "Surat dokter menyusul" }
+```
+
+Response 200 — objek absensi.
+
+Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `409` hasil perubahan `tanggal` bentrok
+dengan baris lain milik pegawai yang sama, `422` field tidak valid / `jamKeluar < jamMasuk` /
+`pegawaiId` disertakan
+
+---
+
 # 9. Dokumen
 
 GET
