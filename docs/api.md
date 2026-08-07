@@ -269,59 +269,114 @@ Dashboard Statistics
 
 # 6. Pegawai
 
-GET
+Diimplementasikan pada Phase 3 (Employee Management). Path aktual adalah `/pegawai` (bukan `/employees`
+seperti draft awal) — mengikuti nama tabel `public.pegawai` sesuai konvensi yang sudah dipakai di seluruh
+project (lihat catatan penamaan Indonesia di Bagian 20). Seluruh endpoint memerlukan
+`Authorization: Bearer <accessToken>` dan diproteksi middleware — role tidak pernah dicek di Controller.
 
-/employees
+`:id` pada endpoint di bawah adalah `pegawai.id` (primary key tabel `pegawai`), **bukan** `users.id`.
 
-List Pegawai
+Tidak ada endpoint `DELETE /pegawai/{id}`. Menonaktifkan pegawai dilakukan lewat
+`PATCH /pegawai/{id}` dengan `{ "statusKepegawaian": "nonaktif" }`, memakai kolom yang sudah ada —
+tidak ada penghapusan data maupun perubahan skema.
 
----
-
-GET
-
-/employees/{id}
-
-Detail Pegawai
-
----
-
-POST
-
-/employees
-
-Tambah Pegawai
+Response tidak pernah menyertakan data dari tabel `users` (email, password_hash, dll).
 
 ---
 
-PUT
+## GET /pegawai
 
-/employees/{id}
+Daftar pegawai. **Admin dan HRD only.**
 
-Update Pegawai
+Query params: `page` (default 1), `limit` (default 10, maks 100), `search` (cocok ke `nip`/`nama_lengkap`,
+`ilike`), `divisiId` (UUID), `jabatanId` (UUID), `status` (`aktif`\|`nonaktif`\|`pensiun`)
 
----
+Response 200 (format pagination, lihat Bagian 3)
 
-DELETE
-
-/employees/{id}
-
-Soft Delete Pegawai
+Error: `401` tanpa token, `403` role pegawai/pimpinan
 
 ---
 
-GET
+## GET /pegawai/{id}
 
-/employees/{id}/profile
+Detail pegawai. **Admin dan HRD bisa lihat siapa saja. Role lain (termasuk pegawai/pimpinan) hanya bisa
+lihat profil miliknya sendiri** (dicek lewat `pegawai.user_id === req.user.id`, bukan perbandingan `:id`
+langsung — lihat middleware khusus `pegawai.authorize.js`).
 
-Profil Pegawai
+Response 200
+
+```json
+{
+  "success": true,
+  "message": "Detail pegawai",
+  "data": {
+    "id": "uuid", "userId": "uuid", "divisiId": null, "jabatanId": null,
+    "nip": "...", "namaLengkap": "...", "jenisKelamin": "Laki-laki",
+    "tempatLahir": null, "tanggalLahir": null, "alamat": null, "noTelepon": null,
+    "tanggalMasuk": null, "statusKepegawaian": "aktif",
+    "createdAt": "...", "updatedAt": "..."
+  }
+}
+```
+
+Error: `401`, `403` bukan admin/HRD dan bukan pemilik profil, `404` tidak ditemukan, `422` id bukan UUID
 
 ---
 
-PUT
+## POST /pegawai
 
-/employees/{id}/profile
+Membuat profil pegawai untuk akun Supabase Auth yang **sudah ada** (dibuat lewat `POST /auth/register`).
+**Admin dan HRD only.** Endpoint ini **tidak pernah** membuat akun Supabase Auth baru — hanya
+menghubungkan `userId` yang sudah ada ke data kepegawaian.
 
-Update Profil
+Request body
+
+```json
+{
+  "userId": "uuid",
+  "nip": "1234567890",
+  "namaLengkap": "Nama Pegawai",
+  "divisiId": "uuid (opsional)",
+  "jabatanId": "uuid (opsional)",
+  "jenisKelamin": "Laki-laki (opsional)",
+  "tempatLahir": "opsional",
+  "tanggalLahir": "YYYY-MM-DD (opsional)",
+  "alamat": "opsional",
+  "noTelepon": "opsional",
+  "tanggalMasuk": "YYYY-MM-DD (opsional)",
+  "statusKepegawaian": "aktif (opsional, default aktif)"
+}
+```
+
+Response 201 — objek pegawai (format sama seperti GET /pegawai/{id})
+
+Error
+
+- `422` — input tidak valid
+- `401` / `403` — bukan admin/HRD
+- `404` — `userId`, `divisiId`, atau `jabatanId` tidak ditemukan
+- `409` — `userId` sudah punya profil pegawai, atau `nip` sudah terdaftar
+
+---
+
+## PATCH /pegawai/{id}
+
+Partial update. **Admin dan HRD only** — tidak ada self-service update, bahkan untuk profil sendiri.
+
+`userId` **tidak boleh** dikirim di body sama sekali (request langsung ditolak `422` jika ada) — relasi
+ke akun Supabase Auth bersifat permanen setelah dibuat. Field lain (termasuk `nip`, untuk koreksi data)
+boleh diperbarui sebagian.
+
+Request body (semua field opsional, kirim yang ingin diubah saja)
+
+```json
+{ "nip": "...", "namaLengkap": "...", "divisiId": "uuid", "statusKepegawaian": "nonaktif" }
+```
+
+Response 200 — objek pegawai
+
+Error: `401`, `403` bukan admin/HRD, `404` pegawai/divisi/jabatan tidak ditemukan, `409` `nip` sudah
+dipakai pegawai lain, `422` field tidak valid atau `userId` disertakan
 
 ---
 
