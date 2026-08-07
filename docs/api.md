@@ -85,43 +85,151 @@ Pagination
 
 # 4. Authentication
 
-POST
+Diimplementasikan pada Phase 1. Autentikasi menggunakan **Supabase Auth (GoTrue)** sebagai sistem utama —
+bukan JWT custom yang ditandatangani backend sendiri. Backend memvalidasi token lewat Supabase Auth API
+pada setiap request, lalu mencocokkan `auth.users.id` dengan baris `public.users` untuk mengambil `role`.
 
-/auth/login
+Password **tidak pernah** disimpan atau di-hash sendiri oleh backend — sepenuhnya dikelola Supabase Auth
+di tabel internal `auth.users`. Kolom `public.users.password_hash` tidak lagi digunakan (nullable, selalu
+`NULL` untuk akun baru).
 
-Login
-
----
-
-POST
-
-/auth/logout
-
-Logout
+Setiap akun baru (`/auth/register`) selalu dibuat dengan role `pegawai`. Role `admin`/`hrd`/`pimpinan`
+hanya bisa diberikan melalui perubahan data manual/administratif — belum ada endpoint publik untuk itu.
 
 ---
 
-POST
+## POST /auth/register
 
-/auth/refresh-token
+Registrasi akun baru. Selalu dibuat dengan role `pegawai`.
 
-Refresh JWT
+Request body
+
+```json
+{
+  "email": "pegawai@kampus.ac.id",
+  "password": "minimal8karakter"
+}
+```
+
+Response 201
+
+```json
+{
+  "success": true,
+  "message": "Registrasi berhasil",
+  "data": {
+    "id": "uuid",
+    "email": "pegawai@kampus.ac.id",
+    "role": "pegawai",
+    "isActive": true,
+    "lastLogin": null,
+    "createdAt": "2026-08-07T10:17:07.398194+00:00"
+  }
+}
+```
+
+Error
+
+- `422` — email tidak valid / password kurang dari 8 karakter
+- `409` — email sudah terdaftar
 
 ---
 
-GET
+## POST /auth/login
 
-/auth/me
+Request body
 
-Current User
+```json
+{
+  "email": "pegawai@kampus.ac.id",
+  "password": "minimal8karakter"
+}
+```
+
+Response 200
+
+```json
+{
+  "success": true,
+  "message": "Login berhasil",
+  "data": {
+    "user": { "id": "uuid", "email": "...", "role": "pegawai", "isActive": true, "lastLogin": "...", "createdAt": "..." },
+    "session": {
+      "accessToken": "eyJ...",
+      "refreshToken": "...",
+      "expiresAt": 1786101438,
+      "expiresIn": 3600,
+      "tokenType": "bearer"
+    }
+  }
+}
+```
+
+`accessToken` dipakai sebagai `Authorization: Bearer <accessToken>` pada endpoint privat. Default masa
+berlaku access token mengikuti konfigurasi Supabase Auth project (umumnya 3600 detik).
+
+Error
+
+- `422` — input tidak valid
+- `401` — email atau password salah
+- `403` — akun dinonaktifkan (`is_active = false`)
 
 ---
 
-PUT
+## POST /auth/logout
 
-/auth/change-password
+Memerlukan header `Authorization: Bearer <accessToken>`. Mencabut (revoke) access token yang sedang
+dipakai di sisi Supabase Auth — token tidak bisa dipakai lagi setelah ini walau belum kedaluwarsa.
 
-Ganti Password
+Response 200
+
+```json
+{ "success": true, "message": "Logout berhasil", "data": {} }
+```
+
+Error
+
+- `401` — token tidak ada / tidak valid
+
+---
+
+## GET /auth/me
+
+Memerlukan header `Authorization: Bearer <accessToken>`. Mengembalikan profil pengguna yang sedang login.
+
+Response 200
+
+```json
+{
+  "success": true,
+  "message": "OK",
+  "data": { "id": "uuid", "email": "...", "role": "pegawai", "isActive": true, "lastLogin": "...", "createdAt": "..." }
+}
+```
+
+Error
+
+- `401` — token tidak ada, tidak valid, kedaluwarsa, atau akun tidak ditemukan
+- `403` — akun dinonaktifkan
+
+---
+
+## POST /auth/refresh
+
+Menukar refresh token dengan access token baru (dipakai saat access token kedaluwarsa).
+
+Request body
+
+```json
+{ "refreshToken": "..." }
+```
+
+Response 200 — format sama persis dengan field `session` pada `/auth/login`.
+
+Error
+
+- `422` — `refreshToken` tidak dikirim
+- `401` — refresh token tidak valid / kedaluwarsa
 
 ---
 

@@ -1,8 +1,14 @@
 const dotenv = require("dotenv");
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
-const requiredVars = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "JWT_SECRET", "JWT_REFRESH_SECRET"];
+const requiredVars = [
+  "SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "SUPABASE_ANON_KEY",
+  "JWT_SECRET",
+  "JWT_REFRESH_SECRET",
+];
 
 const missingVars = requiredVars.filter((key) => !process.env[key]);
 
@@ -16,6 +22,7 @@ const environment = {
 
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
 
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "15m",
