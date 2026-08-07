@@ -783,33 +783,96 @@ GET
 
 # 20. Users
 
-GET
+Diimplementasikan pada Phase 2 (Role & User Management). Seluruh endpoint memerlukan
+`Authorization: Bearer <accessToken>` (`authMiddleware`) dan diproteksi `authorize`/`authorizeSelfOrRoles`
+middleware — role tidak pernah dicek langsung di Controller.
 
-/users
+Tidak ada endpoint `POST /users` (pembuatan akun hanya lewat `/auth/register`, selalu role `pegawai`) dan
+tidak ada endpoint `DELETE /users/{id}` (admin tidak diperbolehkan menghapus akun secara sembarangan —
+gunakan `PATCH /users/{id}/status` untuk menonaktifkan).
 
----
+Response tidak pernah menyertakan `password_hash`, access token, refresh token, atau secret apa pun.
 
-GET
-
-/users/{id}
-
----
-
-POST
-
-/users
+Modul CRUD untuk tabel `pegawai` (dikelola HRD) **belum diimplementasikan** — direncanakan pada phase
+terpisah.
 
 ---
 
-PUT
+## GET /users
 
-/users/{id}
+Daftar user. **Admin only.**
+
+Query params: `page` (default 1), `limit` (default 10, maksimal 100)
+
+Response 200 (format pagination, lihat Bagian 3)
+
+```json
+{
+  "success": true,
+  "message": "Daftar user",
+  "data": [
+    { "id": "uuid", "email": "...", "role": "admin", "isActive": true, "lastLogin": "...", "createdAt": "...", "updatedAt": "..." }
+  ],
+  "pagination": { "page": 1, "limit": 10, "total": 5, "total_pages": 1 }
+}
+```
+
+Error: `401` tanpa token, `403` bukan admin
 
 ---
 
-DELETE
+## GET /users/{id}
 
-/users/{id}
+Detail user. **Admin bisa lihat siapa saja. Role lain hanya bisa lihat dirinya sendiri**
+(`authorizeSelfOrRoles`).
+
+Response 200
+
+```json
+{
+  "success": true,
+  "message": "Detail user",
+  "data": { "id": "uuid", "email": "...", "role": "pegawai", "isActive": true, "lastLogin": "...", "createdAt": "...", "updatedAt": "..." }
+}
+```
+
+Error: `401` tanpa token, `403` bukan admin dan bukan `{id}` milik sendiri, `404` tidak ditemukan,
+`422` `{id}` bukan UUID valid
+
+---
+
+## PATCH /users/{id}/role
+
+Mengubah role user. **Admin only** — tidak ada jalur self-service, sehingga pegawai tidak mungkin
+mengubah role dirinya sendiri.
+
+Request body
+
+```json
+{ "role": "hrd" }
+```
+
+`role` harus salah satu dari: `admin`, `hrd`, `pegawai`, `pimpinan`.
+
+Response 200 — objek user (format sama seperti GET /users/{id})
+
+Error: `401`, `403` bukan admin, `404` tidak ditemukan, `422` role tidak valid / id bukan UUID
+
+---
+
+## PATCH /users/{id}/status
+
+Mengaktifkan/menonaktifkan user. **Admin only.**
+
+Request body
+
+```json
+{ "isActive": false }
+```
+
+Response 200 — objek user
+
+Error: `401`, `403` bukan admin, `404` tidak ditemukan, `422` `isActive` bukan boolean / id bukan UUID
 
 ---
 
