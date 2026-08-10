@@ -548,6 +548,135 @@ dengan baris lain milik pegawai yang sama, `422` field tidak valid / `jamKeluar 
 
 ---
 
+# 8b. Cuti
+
+Diimplementasikan pada Phase 6 (Cuti Management). Path aktual `/cuti`. Seluruh endpoint memerlukan
+`Authorization: Bearer <accessToken>`. Role tidak pernah dicek di Controller — gate akses ada di
+`authMiddleware`/`authorize`/`cuti.authorize.js`, scope data diputuskan di Service.
+
+`:id` pada endpoint di bawah adalah `cuti.id`, bukan `pegawai.id`.
+
+Tidak ada endpoint `DELETE` maupun `PATCH /cuti/{id}` generik. Approve/reject/cancel adalah *state
+transition* dengan efek samping spesifik, sehingga masing-masing punya sub-resource sendiri. Cuti yang
+sudah `disetujui`/`ditolak` tidak bisa diedit — kalau ada kesalahan, harus mengajukan baru (audit trail
+tetap jelas).
+
+**Fitur saldo/jatah cuti tidak diimplementasikan** — tidak ada kolom/tabel pendukung di schema saat ini.
+
+---
+
+## GET /cuti
+
+Query params: `page`, `limit`, `pegawaiId` (UUID, hanya efektif untuk admin/hrd), `status`
+(`diajukan`\|`disetujui`\|`ditolak`\|`dibatalkan`), `jenisCuti`
+
+- **Admin/HRD**: melihat seluruh data, `pegawaiId` sebagai filter opsional.
+- **Pegawai/Pimpinan**: `pegawaiId` dari query **diabaikan** — hasil selalu otomatis di-scope ke pegawai
+  milik akun yang login. Jika akun belum punya profil pegawai, hasilnya `200` dengan `data: []`.
+
+Response 200 — format pagination standar. Error: `401` tanpa token.
+
+---
+
+## GET /cuti/{id}
+
+**Admin/HRD** bisa lihat siapa pun. **Pegawai/Pimpinan** hanya bisa lihat miliknya sendiri (dicek lewat
+`cuti.pegawai_id` yang dicocokkan ke pegawai milik `req.user.id`).
+
+Response 200
+
+```json
+{
+  "success": true,
+  "message": "Detail cuti",
+  "data": {
+    "id": "uuid", "pegawaiId": "uuid", "jenisCuti": "cuti_tahunan",
+    "tanggalMulai": "2026-09-01", "tanggalSelesai": "2026-09-03", "jumlahHari": 3,
+    "alasan": null, "status": "diajukan",
+    "disetujuiOleh": null, "tanggalPersetujuan": null, "catatanApproval": null,
+    "createdAt": "...", "updatedAt": "..."
+  }
+}
+```
+
+Error: `401`, `403` bukan admin/HRD dan bukan pemilik, `404` tidak ditemukan, `422` id bukan UUID
+
+---
+
+## POST /cuti
+
+Perilaku berbeda tergantung role — endpoint yang sama, sumber identitas berbeda:
+
+- **Admin/HRD**: `pegawaiId` **wajib** dikirim di body — dapat mengajukan atas nama pegawai mana pun.
+  Boleh memasukkan tanggal yang sudah lewat (backdated).
+- **Pegawai**: `pegawaiId` **tidak boleh dikirim sama sekali** (422 jika ada) — identitas selalu
+  diresolusi dari `req.user.id` → `pegawai.user_id` miliknya sendiri. `tanggalMulai` **tidak boleh**
+  sebelum hari ini, **kecuali** `jenisCuti = cuti_sakit`.
+- **Pimpinan**: selalu `403`.
+
+`jumlahHari` **tidak boleh dikirim** — kolom generated, dihitung otomatis oleh database.
+
+```json
+{
+  "jenisCuti": "cuti_tahunan",
+  "tanggalMulai": "2026-09-01",
+  "tanggalSelesai": "2026-09-03",
+  "alasan": "Acara keluarga (opsional)"
+}
+```
+
+Response `201`, status awal selalu `diajukan`.
+
+**Validasi overlap:** ditolak `409` jika pegawai yang sama sudah punya cuti berstatus `diajukan` atau
+`disetujui` dengan rentang tanggal yang beririsan. Cuti berstatus `ditolak`/`dibatalkan` tidak dihitung
+sebagai konflik — pengajuan baru untuk tanggal yang sama tetap diperbolehkan.
+
+Error: `401`, `403` (pimpinan, atau `pegawaiId` tanpa role admin/hrd), `404` (`pegawaiId` tidak
+ditemukan — admin/hrd, atau profil pegawai sendiri tidak ditemukan — pegawai), `409` (tanggal bentrok),
+`422` (input tidak valid, `tanggalSelesai < tanggalMulai`, `jumlahHari` dikirim, `pegawaiId` dikirim
+oleh pegawai, atau `tanggalMulai` backdated oleh pegawai non-cuti_sakit)
+
+---
+
+## PATCH /cuti/{id}/approve
+
+**Admin/HRD only.** Hanya valid jika status saat ini `diajukan` (409 jika sudah diproses).
+
+Set `status=disetujui`, `disetujuiOleh=<user yang approve>`, `tanggalPersetujuan=<waktu approve>`.
+
+```json
+{ "catatanApproval": "Disetujui, kuota tersedia (opsional)" }
+```
+
+Response 200. Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `409` status bukan `diajukan`
+
+---
+
+## PATCH /cuti/{id}/reject
+
+**Admin/HRD only.** `catatanApproval` **wajib diisi** (alasan penolakan) — `422` jika kosong/tidak ada.
+
+```json
+{ "catatanApproval": "Bertabrakan dengan jadwal operasional" }
+```
+
+Response 200, `status=ditolak`. Error: `401`, `403`, `404`, `409` status bukan `diajukan`,
+`422` `catatanApproval` tidak diisi
+
+---
+
+## PATCH /cuti/{id}/cancel
+
+**Admin/HRD** (siapa pun) **atau pegawai pemilik pengajuan** — hanya valid jika status masih `diajukan`.
+Pegawai **tidak bisa** membatalkan pengajuan yang sudah `disetujui`/`ditolak`.
+
+Response 200, `status=dibatalkan`.
+
+Error: `401`, `403` bukan admin/HRD dan bukan pemilik, `404` tidak ditemukan, `409` status bukan
+`diajukan`, `422` id bukan UUID
+
+---
+
 # 9. Dokumen
 
 GET

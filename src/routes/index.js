@@ -5,6 +5,7 @@ const pegawaiRoutes = require("../modules/pegawai/pegawai.routes");
 const divisiRoutes = require("../modules/divisi/divisi.routes");
 const jabatanRoutes = require("../modules/jabatan/jabatan.routes");
 const absensiRoutes = require("../modules/absensi/absensi.routes");
+const cutiRoutes = require("../modules/cuti/cuti.routes");
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use("/pegawai", pegawaiRoutes);
 router.use("/divisi", divisiRoutes);
 router.use("/jabatan", jabatanRoutes);
 router.use("/absensi", absensiRoutes);
+router.use("/cuti", cutiRoutes);
 
 module.exports = router;
