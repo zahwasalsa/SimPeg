@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cuti - SimPeg</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="/css/app.css" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="app-navbar"></div>
+    <main class="container py-4">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h3 mb-0">Cuti</h1>
+        <button id="cuti-add-btn" type="button" class="btn btn-primary d-none">+ Ajukan Cuti</button>
+      </div>
+
+      <div class="row g-2 mb-3">
+        <div class="col-sm-4 d-none" id="cuti-filter-pegawai-wrap">
+          <select id="cuti-filter-pegawai" class="form-select" aria-label="Filter pegawai">
+            <option value="">Semua Pegawai</option>
+          </select>
+        </div>
+        <div class="col-sm-4">
+          <select id="cuti-filter-status" class="form-select" aria-label="Filter status">
+            <option value="">Semua Status</option>
+            <option value="diajukan">Diajukan</option>
+            <option value="disetujui">Disetujui</option>
+            <option value="ditolak">Ditolak</option>
+            <option value="dibatalkan">Dibatalkan</option>
+          </select>
+        </div>
+        <div class="col-sm-4">
+          <select id="cuti-filter-jenis" class="form-select" aria-label="Filter jenis cuti">
+            <option value="">Semua Jenis Cuti</option>
+            <option value="cuti_tahunan">Cuti Tahunan</option>
+            <option value="cuti_sakit">Cuti Sakit</option>
+            <option value="cuti_melahirkan">Cuti Melahirkan</option>
+            <option value="cuti_besar">Cuti Besar</option>
+            <option value="cuti_alasan_penting">Cuti Alasan Penting</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body p-0" id="cuti-table"></div>
+      </div>
+      <div class="mt-3" id="cuti-pagination"></div>
+    </main>
+
+    <script src="/js/config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="/js/pages/cuti.page.js"></script>
+  </body>
+</html>

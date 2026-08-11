@@ -25,6 +25,7 @@ const dateAdmin = "2020-01-01";
 const dateHrd = "2020-01-02";
 const dateInvalidJam = "2020-01-03";
 const dateInvalidStatus = "2020-01-04";
+const dateSameMinuteCheckout = "2020-01-05";
 
 const createTestAccount = async (email, password, role) => {
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -222,6 +223,28 @@ test("POST /absensi - third call the same day is rejected (409), covers repeated
     .set("Authorization", `Bearer ${accounts.pegawaiA.token}`)
     .send({ tanggal: today });
   assert.equal(res.status, 409);
+});
+
+test("POST /absensi - checkout in the same clock-minute as check-in is accepted (200), not misread as jamKeluar < jamMasuk", async () => {
+  // Regression test: jamMasuk is stored as "HH:mm:ss" but a check-out
+  // request sends jamKeluar as "HH:mm" (per TIME_REGEX). Comparing the two
+  // formats directly as strings makes "09:15" appear less than "09:15:00"
+  // (prefix compares as "smaller"), wrongly rejecting a same-minute
+  // check-out. validateJamRange must normalize both to "HH:mm" first.
+  const checkinRes = await request(app)
+    .post("/api/v1/absensi")
+    .set("Authorization", `Bearer ${accounts.pegawaiB.token}`)
+    .send({ tanggal: dateSameMinuteCheckout, jamMasuk: "09:15" });
+  assert.equal(checkinRes.status, 201);
+  assert.equal(checkinRes.body.data.jamMasuk, "09:15:00");
+
+  const checkoutRes = await request(app)
+    .post("/api/v1/absensi")
+    .set("Authorization", `Bearer ${accounts.pegawaiB.token}`)
+    .send({ tanggal: dateSameMinuteCheckout, jamKeluar: "09:15" });
+  assert.equal(checkoutRes.status, 200);
+  assert.equal(checkoutRes.body.data.jamMasuk, "09:15:00");
+  assert.equal(checkoutRes.body.data.jamKeluar, "09:15:00");
 });
 
 // --- GET detail (with real rows) ---

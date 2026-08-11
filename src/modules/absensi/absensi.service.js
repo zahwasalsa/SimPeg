@@ -14,8 +14,15 @@ const sanitizeAbsensi = (row) => ({
   updatedAt: row.updated_at,
 });
 
+// jamMasuk/jamKeluar may arrive as "HH:mm" (request body, per TIME_REGEX) or
+// "HH:mm:ss" (values read back from the DB's TIME column) — comparing the two
+// formats directly is a string comparison where "11:47" < "11:47:00" is true
+// (shorter is a prefix of the longer), which falsely rejects a same-minute
+// check-out. Truncate both to "HH:mm" first so the comparison is apples-to-apples.
+const normalizeTime = (value) => (value ? value.slice(0, 5) : value);
+
 const validateJamRange = (jamMasuk, jamKeluar) => {
-  if (jamMasuk && jamKeluar && jamKeluar < jamMasuk) {
+  if (jamMasuk && jamKeluar && normalizeTime(jamKeluar) < normalizeTime(jamMasuk)) {
     throw new AppError("jamKeluar harus lebih besar atau sama dengan jamMasuk", 422);
   }
 };

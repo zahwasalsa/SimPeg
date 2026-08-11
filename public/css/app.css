@@ -1,0 +1,29 @@
+body {
+  min-height: 100vh;
+  background-color: #f5f6f8;
+}
+
+.navbar-brand {
+  font-weight: 600;
+}
+
+.auth-shell {
+  min-height: 100vh;
+}
+
+.auth-card {
+  max-width: 400px;
+  width: 100%;
+}
+
+.profile-card {
+  max-width: 480px;
+}
+
+@media (max-width: 576px) {
+  .container,
+  .container-fluid {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}

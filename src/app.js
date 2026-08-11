@@ -1,3 +1,4 @@
+const path = require("path");
 const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
@@ -11,7 +12,17 @@ const routes = require("./routes");
 
 const app = express();
 
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        "script-src": ["'self'", "https://cdn.jsdelivr.net"],
+        "style-src": ["'self'", "https://cdn.jsdelivr.net"],
+      },
+    },
+  }),
+);
 app.use(cors({ origin: environment.corsOrigin }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -27,6 +38,16 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/v1", routes);
+
+// Static frontend (public/) — served from the same origin as the API, so no
+// CORS is needed for the browser client. Clean URLs like /login resolve to
+// login.html automatically.
+const publicDir = path.join(__dirname, "..", "public");
+app.use(express.static(publicDir, { extensions: ["html"] }));
+
+app.get("/", (req, res) => {
+  res.redirect("/login");
+});
 
 app.use(notFoundHandler);
 app.use(errorHandler);
