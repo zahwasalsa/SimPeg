@@ -6,6 +6,7 @@ import { escapeHtml } from "../utils/format.js";
 // grant or revoke any access; the API enforces the real rule regardless.
 const ALL_ROLES = ["admin", "hrd", "pegawai", "pimpinan"];
 const MANAGE_ROLES = ["admin", "hrd"];
+const ADMIN_ONLY = ["admin"];
 
 const MENU = [
   { label: "Dashboard", href: "/dashboard", roles: ALL_ROLES },
@@ -21,6 +22,9 @@ const MENU = [
   // pimpinan cannot submit new requests (POST is 403 for them) but can still
   // view and cancel their own, so the link stays visible for them too.
   { label: "Cuti", href: "/cuti", roles: ALL_ROLES },
+  // GET /users (list) is admin-only at the backend — even hrd gets 403,
+  // unlike Pegawai's admin+hrd matrix — so this link is stricter than Pegawai.
+  { label: "Manajemen User", href: "/users", roles: ADMIN_ONLY },
   { label: "Profil", href: "/profile", roles: ALL_ROLES },
 ];
 
