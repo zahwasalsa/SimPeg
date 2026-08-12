@@ -29,7 +29,11 @@ const doRefresh = async () => {
 // /auth/refresh on a 401, and normalizes error responses into thrown Errors
 // so pages don't need to repeat try/catch boilerplate for every call.
 export const apiFetch = async (path, { method = "GET", body, auth = true, retry = true } = {}) => {
-  const headers = { "Content-Type": "application/json" };
+  // FormData (file uploads) must not be JSON-stringified and must not get an
+  // explicit Content-Type — the browser sets multipart/form-data with the
+  // correct boundary itself. Every other caller still sends plain objects.
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  const headers = isFormData ? {} : { "Content-Type": "application/json" };
   if (auth) {
     const token = getAccessToken();
     if (token) {
@@ -40,7 +44,7 @@ export const apiFetch = async (path, { method = "GET", body, auth = true, retry 
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? (isFormData ? body : JSON.stringify(body)) : undefined,
   });
 
   const payload = await res.json().catch(() => null);
