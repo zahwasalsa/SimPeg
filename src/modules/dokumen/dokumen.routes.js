@@ -40,4 +40,35 @@ router.post(
   controller.create,
 );
 
+router.get(
+  "/:id/versi",
+  validation.idParamValidation,
+  validate,
+  dokumenAuthorize("admin", "hrd"),
+  validation.versiListValidation,
+  validate,
+  controller.listVersi,
+);
+
+// Role gate first (rejects pimpinan outright, mirrors POST /), then ownership
+// check on :id (rejects pegawai targeting someone else's dokumen) before the
+// multipart body is even parsed.
+router.post(
+  "/:id/versi",
+  authorize("admin", "hrd", "pegawai"),
+  validation.idParamValidation,
+  validate,
+  dokumenAuthorize("admin", "hrd"),
+  uploadSingleFile,
+  controller.createVersi,
+);
+
+router.get(
+  "/:id/versi/:versionId/download",
+  validation.versiIdParamValidation,
+  validate,
+  dokumenAuthorize("admin", "hrd"),
+  controller.downloadVersi,
+);
+
 module.exports = router;

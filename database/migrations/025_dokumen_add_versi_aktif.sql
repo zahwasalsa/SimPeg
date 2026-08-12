@@ -1,0 +1,2 @@
+ALTER TABLE dokumen
+    ADD COLUMN versi_aktif INTEGER NOT NULL DEFAULT 1;

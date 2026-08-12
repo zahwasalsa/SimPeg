@@ -292,7 +292,11 @@ Riwayat jabatan pegawai.
 
 ## dokumen
 
-Metadata dokumen.
+Metadata dokumen. Kolom `nama_file_asli`, `file_path`, `bucket`, `mime_type`, `ukuran_file`
+selalu mencerminkan (mirror) versi yang sedang aktif — diperbarui setiap kali versi baru
+diunggah melalui `dokumen_version` (lihat di bawah). Ini memungkinkan endpoint yang sudah ada
+(`GET /dokumen`, `GET /dokumen/:id`, `GET /dokumen/:id/download`) selalu menunjuk versi
+terbaru tanpa perlu join ke `dokumen_version`.
 
 Kolom
 
@@ -300,18 +304,41 @@ Kolom
 - pegawai_id
 - kategori_dokumen_id
 - nama_dokumen
+- nama_file_asli
 - file_path
 - bucket
 - mime_type
 - ukuran_file
-- versi_aktif
+- diunggah_oleh
+- versi_aktif — nomor versi yang sedang aktif, mengacu ke `dokumen_version.nomor_versi`
 - created_at
+- updated_at
+- deleted_at
 
 ---
 
 ## dokumen_version
 
-Versi dokumen.
+Riwayat versi dokumen (FR-DOC-004, FR-DOC-005). Setiap kali dokumen diunggah pertama kali
+maupun saat versi baru diunggah, satu baris ditambahkan ke tabel ini — bersifat immutable,
+tidak ada endpoint update/delete untuk baris versi.
+
+Kolom
+
+- id
+- dokumen_id — FK ke `dokumen.id`, `ON DELETE CASCADE`
+- nomor_versi — integer berurutan mulai dari 1, unik per `dokumen_id` (`UNIQUE(dokumen_id, nomor_versi)`)
+- nama_file_asli
+- file_path — path fisik di Supabase Storage khusus versi ini; file versi lama tetap disimpan permanen, tidak pernah dihapus/ditimpa
+- bucket
+- mime_type
+- ukuran_file
+- diunggah_oleh — FK ke `users.id`, `ON DELETE SET NULL`
+- created_at
+- updated_at
+
+Tidak memiliki `deleted_at` — riwayat versi bersifat permanen (bukan entitas yang bisa
+dihapus lewat API), konsisten dengan tujuan FR-DOC-005.
 
 Relasi
 

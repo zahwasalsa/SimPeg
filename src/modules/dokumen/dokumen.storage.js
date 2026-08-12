@@ -10,14 +10,16 @@ const SIGNED_URL_EXPIRES_IN_SECONDS = 60;
 // metadata column (nama_file_asli), not as part of the storage path.
 const sanitizeForPath = (value) => value.replace(/[^a-zA-Z0-9._-]/g, "_");
 
-const buildFilePath = (pegawaiId, originalName) => {
+// Nested under dokumenId so every version of the same document lives in one
+// folder — makes manual auditing in the Storage dashboard straightforward.
+const buildFilePath = (pegawaiId, dokumenId, originalName) => {
   const ext = originalName.includes(".") ? originalName.slice(originalName.lastIndexOf(".")) : "";
   const safeExt = sanitizeForPath(ext).slice(0, 20);
-  return `${pegawaiId}/${crypto.randomUUID()}${safeExt}`;
+  return `${pegawaiId}/${dokumenId}/${crypto.randomUUID()}${safeExt}`;
 };
 
-const uploadFile = async ({ pegawaiId, buffer, mimeType, originalName }) => {
-  const filePath = buildFilePath(pegawaiId, originalName);
+const uploadFile = async ({ pegawaiId, dokumenId, buffer, mimeType, originalName }) => {
+  const filePath = buildFilePath(pegawaiId, dokumenId, originalName);
 
   const { error } = await supabase.storage.from(BUCKET).upload(filePath, buffer, {
     contentType: mimeType,
@@ -29,6 +31,13 @@ const uploadFile = async ({ pegawaiId, buffer, mimeType, originalName }) => {
   }
 
   return { bucket: BUCKET, filePath };
+};
+
+// Best-effort cleanup for orphaned objects when a DB write fails after the
+// Storage upload already succeeded. Never throws — callers log failures
+// themselves so the original error remains the one surfaced to the client.
+const removeFile = async (filePath) => {
+  await supabase.storage.from(BUCKET).remove([filePath]);
 };
 
 // `download` triggers Content-Disposition: attachment with the given
@@ -46,4 +55,4 @@ const getSignedUrl = async (filePath, { download } = {}) => {
   return { url: data.signedUrl, expiresIn: SIGNED_URL_EXPIRES_IN_SECONDS };
 };
 
-module.exports = { BUCKET, uploadFile, getSignedUrl };
+module.exports = { BUCKET, uploadFile, getSignedUrl, removeFile };

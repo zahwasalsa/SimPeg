@@ -1,0 +1,1 @@
+ALTER TABLE public.dokumen_version ENABLE ROW LEVEL SECURITY;

@@ -36,4 +36,20 @@ const createValidation = [
     .withMessage("namaDokumen wajib diisi (maksimal 200 karakter)"),
 ];
 
-module.exports = { listValidation, idParamValidation, createValidation };
+const versiListValidation = [
+  query("page").optional().isInt({ min: 1 }).toInt(),
+  query("limit").optional().isInt({ min: 1, max: 100 }).toInt(),
+];
+
+const versiIdParamValidation = [
+  param("id").isUUID().withMessage("ID tidak valid"),
+  param("versionId").isUUID().withMessage("versionId tidak valid"),
+];
+
+module.exports = {
+  listValidation,
+  idParamValidation,
+  createValidation,
+  versiListValidation,
+  versiIdParamValidation,
+};

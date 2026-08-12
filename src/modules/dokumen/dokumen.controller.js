@@ -68,4 +68,56 @@ const download = async (req, res, next) => {
   }
 };
 
-module.exports = { list, detail, create, download };
+const listVersi = async (req, res, next) => {
+  try {
+    const page = req.query.page || 1;
+    const limit = req.query.limit || 10;
+
+    const { versions, pagination } = await dokumenService.getDokumenVersions(req.params.id, { page, limit });
+
+    responseHelper.paginated(res, {
+      message: "Riwayat versi dokumen",
+      data: versions,
+      page: pagination.page,
+      limit: pagination.limit,
+      total: pagination.total,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const createVersi = async (req, res, next) => {
+  try {
+    const version = await dokumenService.createDokumenVersion({
+      dokumenId: req.params.id,
+      requester: req.user,
+      file: req.file,
+    });
+
+    responseHelper.success(res, {
+      statusCode: 201,
+      message: "Versi baru dokumen berhasil diunggah",
+      data: version,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Mirrors `download` above: ?download=1 toggles Content-Disposition, applied
+// to a specific version instead of the currently active one.
+const downloadVersi = async (req, res, next) => {
+  try {
+    const { url, expiresIn } = await dokumenService.getDokumenVersionDownloadUrl(
+      req.params.id,
+      req.params.versionId,
+      { download: req.query.download === "1" || req.query.download === "true" },
+    );
+    responseHelper.success(res, { message: "Tautan versi dokumen", data: { url, expiresIn } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { list, detail, create, download, listVersi, createVersi, downloadVersi };

@@ -679,67 +679,201 @@ Error: `401`, `403` bukan admin/HRD dan bukan pemilik, `404` tidak ditemukan, `4
 
 # 9. Dokumen
 
-GET
+Diimplementasikan pada Phase 5 (Document Management), Stage 4A + Stage 4B. Path aktual `/dokumen` dan
+`/kategori-dokumen` (bukan `/documents`/`/document-categories`). Seluruh endpoint memerlukan
+`Authorization: Bearer <accessToken>`. Role tidak pernah dicek di Controller — gate akses ada di
+`authMiddleware`/`authorize`/`dokumen.authorize.js`, scope data diputuskan di Service.
 
-/documents
+`:id` pada endpoint di bawah adalah `dokumen.id`. Tidak ada endpoint `PATCH`/`DELETE` untuk `dokumen`
+maupun `dokumen_version` — riwayat versi bersifat immutable, tidak bisa diedit/dihapus lewat API.
 
-Daftar Dokumen
+Kolom `dokumen.namaFileAsli`/`bucket`/`mimeType`/`ukuranFile` selalu mencerminkan **versi aktif**
+(diperbarui otomatis setiap kali versi baru diunggah) — `GET /dokumen`, `GET /dokumen/{id}`, dan
+`GET /dokumen/{id}/download` selalu mengacu ke versi terbaru tanpa perlu memanggil endpoint versi.
 
----
-
-GET
-
-/documents/{id}
-
-Detail Dokumen
-
----
-
-POST
-
-/documents
-
-Upload Dokumen
+**Validasi berkas (FR-DOC-007/008)**, berlaku untuk upload dokumen maupun upload versi baru:
+tipe yang diizinkan `application/pdf`, `image/jpeg`, `image/png`, `application/msword`,
+`application/vnd.openxmlformats-officedocument.wordprocessingml.document`; ukuran maksimum 10MB.
 
 ---
 
-PUT
+## GET /dokumen
 
-/documents/{id}
+Query params: `page`, `limit`, `pegawaiId` (UUID, hanya efektif untuk admin/hrd), `kategoriDokumenId`
+(UUID)
 
-Update Metadata
+- **Admin/HRD**: melihat seluruh data, `pegawaiId` sebagai filter opsional.
+- **Pegawai/Pimpinan**: `pegawaiId` dari query **diabaikan** — hasil selalu otomatis di-scope ke pegawai
+  milik akun yang login. Jika akun belum punya profil pegawai, hasilnya `200` dengan `data: []`.
 
----
-
-DELETE
-
-/documents/{id}
-
-Soft Delete
+Response 200 — format pagination standar. Error: `401` tanpa token.
 
 ---
 
-GET
+## GET /dokumen/{id}
 
-/documents/{id}/versions
+**Admin/HRD** bisa lihat siapa pun. **Pegawai/Pimpinan** hanya bisa lihat milik sendiri.
 
-Riwayat Versi
+Response 200
+
+```json
+{
+  "success": true,
+  "message": "Detail dokumen",
+  "data": {
+    "id": "uuid", "pegawaiId": "uuid", "kategoriDokumenId": "uuid",
+    "namaDokumen": "Ijazah S1", "namaFileAsli": "ijazah.pdf",
+    "bucket": "documents", "mimeType": "application/pdf", "ukuranFile": 204800,
+    "diunggahOleh": "uuid", "createdAt": "...", "updatedAt": "..."
+  }
+}
+```
+
+Error: `401`, `403` bukan admin/HRD dan bukan pemilik, `404` tidak ditemukan (termasuk soft-deleted),
+`422` id bukan UUID
 
 ---
 
-POST
+## GET /dokumen/{id}/download
 
-/documents/{id}/versions
+Query params: `download` (`1`/`true` untuk attachment; tanpa parameter = inline preview)
 
-Upload Versi Baru
+Menghasilkan signed URL (berlaku 60 detik) ke file **versi aktif**. Permission sama seperti
+`GET /dokumen/{id}`.
+
+Response 200: `{ "success": true, "message": "Tautan dokumen", "data": { "url": "...", "expiresIn": 60 } }`
+
+Error: sama seperti `GET /dokumen/{id}`; `502` gagal membuat signed URL.
 
 ---
 
-GET
+## POST /dokumen
 
-/document-categories
+Perilaku berbeda tergantung role — endpoint yang sama, sumber identitas berbeda:
 
-Kategori Dokumen
+- **Admin/HRD**: `pegawaiId` **wajib** dikirim di body — dapat mengunggah atas nama pegawai mana pun.
+- **Pegawai**: `pegawaiId` **tidak boleh dikirim sama sekali** (422 jika ada) — identitas selalu
+  diresolusi dari `req.user.id` → `pegawai.user_id` miliknya sendiri.
+- **Pimpinan**: selalu `403`.
+
+`multipart/form-data`: `pegawaiId` (UUID, kondisional), `kategoriDokumenId` (UUID, wajib),
+`namaDokumen` (string 1–200, wajib), `file` (wajib).
+
+Response `201`. Dokumen baru otomatis membuat `dokumen_version` nomor 1 (`versiAktif=1`) — jika
+langkah ini gagal, dokumen tetap berhasil dibuat (di-log, tidak menggagalkan permintaan) karena tidak
+ada transaction lintas tabel di implementasi saat ini.
+
+Error: `401`, `403` (pimpinan, atau `pegawaiId` tanpa role admin/hrd), `404` (`pegawaiId`/
+`kategoriDokumenId` tidak ditemukan), `422` (field tidak valid, tipe berkas tidak didukung, berkas
+kosong, atau `pegawaiId` dikirim oleh pegawai), `422` ukuran berkas >10MB
+
+---
+
+## GET /dokumen/{id}/versi
+
+*(Stage 4B — FR-DOC-005)* Riwayat seluruh versi dokumen, urut `nomorVersi` terbaru → terlama.
+
+Query params: `page`, `limit`. Permission sama seperti `GET /dokumen/{id}`.
+
+Response 200
+
+```json
+{
+  "success": true,
+  "message": "Riwayat versi dokumen",
+  "data": [
+    { "id": "uuid", "dokumenId": "uuid", "nomorVersi": 2, "namaFileAsli": "ijazah_v2.pdf",
+      "bucket": "documents", "mimeType": "application/pdf", "ukuranFile": 204800,
+      "diunggahOleh": "uuid", "createdAt": "...", "updatedAt": "..." }
+  ],
+  "pagination": { "page": 1, "limit": 10, "total": 2, "total_pages": 1 }
+}
+```
+
+Error: `401`, `403` bukan admin/HRD dan bukan pemilik, `404` dokumen tidak ditemukan (termasuk
+soft-deleted), `422` id bukan UUID
+
+---
+
+## POST /dokumen/{id}/versi
+
+*(Stage 4B — FR-DOC-004)* Mengunggah versi baru untuk dokumen yang sudah ada. Tidak menghapus versi
+sebelumnya — file lama tetap tersimpan permanen di Supabase Storage.
+
+- **Admin/HRD**: boleh mengunggah versi baru untuk dokumen milik pegawai mana pun.
+- **Pegawai**: hanya untuk dokumen miliknya sendiri (403 jika bukan pemilik).
+- **Pimpinan**: selalu `403` — tidak boleh mengunggah versi, sama seperti `POST /dokumen`.
+
+`multipart/form-data`: `file` (wajib). Tidak ada field lain — `namaDokumen`/`kategoriDokumenId` melekat
+pada dokumen induk, bukan per-versi.
+
+Nomor versi dihitung otomatis (`MAX(nomorVersi)+1`). Setelah tersimpan, `dokumen.versiAktif` dan kolom
+metadata mirror pada `dokumen` diperbarui mengikuti versi baru ini.
+
+Response `201`
+
+```json
+{
+  "success": true,
+  "message": "Versi baru dokumen berhasil diunggah",
+  "data": { "id": "uuid", "dokumenId": "uuid", "nomorVersi": 3, "namaFileAsli": "ijazah_v3.pdf",
+    "bucket": "documents", "mimeType": "application/pdf", "ukuranFile": 204800,
+    "diunggahOleh": "uuid", "createdAt": "..." }
+}
+```
+
+Error: `401`, `403` (pimpinan, atau pegawai bukan pemilik dokumen), `404` dokumen tidak ditemukan,
+`422` (berkas kosong, tipe tidak didukung, atau >10MB), `409` tabrakan nomor versi akibat dua upload
+bersamaan (retryable), `502` gagal mengunggah ke Storage
+
+---
+
+## GET /dokumen/{id}/versi/{versionId}/download
+
+*(Stage 4B — FR-DOC-002/003 diterapkan ke versi tertentu)* Signed URL untuk versi tertentu, termasuk
+versi lama yang bukan versi aktif.
+
+Query params: `download` (sama seperti `GET /dokumen/{id}/download`). `versionId` wajib benar-benar
+milik `dokumen.id` pada URL yang sama — jika tidak, diperlakukan sebagai `404` (tidak membocorkan
+keberadaan versi milik dokumen lain). Permission sama seperti `GET /dokumen/{id}`.
+
+Response 200: `{ "success": true, "message": "Tautan versi dokumen", "data": { "url": "...", "expiresIn": 60 } }`
+
+Error: `401`, `403` bukan admin/HRD dan bukan pemilik, `404` dokumen tidak ditemukan atau versi tidak
+ditemukan/tidak cocok dengan dokumen, `422` id/versionId bukan UUID, `502` gagal membuat signed URL
+
+---
+
+## GET /kategori-dokumen
+
+Query params: `page`, `limit`, `search`. Terbuka untuk seluruh role (view-only untuk pegawai/pimpinan).
+
+Response 200 — format pagination standar.
+
+---
+
+## GET /kategori-dokumen/{id}
+
+Response 200: `{ "id", "namaKategori", "deskripsi", "createdAt", "updatedAt" }`. Error: `404`, `422` id
+bukan UUID.
+
+---
+
+## POST /kategori-dokumen
+
+**Admin/HRD only.** Body: `{ "namaKategori": "...", "deskripsi": "... (opsional)" }`.
+
+Response `201`. Error: `401`, `403` bukan admin/HRD, `409` `namaKategori` sudah dipakai, `422` field
+tidak valid.
+
+---
+
+## PATCH /kategori-dokumen/{id}
+
+**Admin/HRD only.** Body sebagian (`namaKategori` dan/atau `deskripsi`).
+
+Response `200`. Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `409` `namaKategori`
+bentrok, `422` field tidak valid.
 
 ---
 
