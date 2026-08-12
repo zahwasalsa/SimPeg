@@ -5,7 +5,15 @@ import { renderPagination } from "../components/pagination.js";
 import { openFormModal } from "../components/modalForm.js";
 import { showToast } from "../components/toast.js";
 import { escapeHtml, formatDateTime } from "../utils/format.js";
-import { listDokumen, getDokumen, createDokumen, getDokumenUrl } from "../api/dokumen.js";
+import {
+  listDokumen,
+  getDokumen,
+  createDokumen,
+  getDokumenUrl,
+  listDokumenVersi,
+  createDokumenVersi,
+  getDokumenVersiUrl,
+} from "../api/dokumen.js";
 import { listKategoriDokumen, createKategoriDokumen, updateKategoriDokumen } from "../api/kategoriDokumen.js";
 import { listPegawai } from "../api/pegawai.js";
 
@@ -143,10 +151,10 @@ const load = async () => {
 // Opens a blank tab synchronously (inside the click handler) so the browser
 // doesn't treat the later async navigation as a blocked popup, then points
 // it at the signed URL once the backend responds.
-const openSignedUrlInNewTab = async (id, { download } = {}) => {
+const openUrlInNewTab = async (fetchUrl) => {
   const win = window.open("", "_blank");
   try {
-    const res = await getDokumenUrl(id, { download });
+    const res = await fetchUrl();
     if (win) {
       win.location.href = res.data.url;
     } else {
@@ -160,7 +168,14 @@ const openSignedUrlInNewTab = async (id, { download } = {}) => {
   }
 };
 
+const openSignedUrlInNewTab = (id, { download } = {}) =>
+  openUrlInNewTab(() => getDokumenUrl(id, { download }));
+
+const openVersiUrlInNewTab = (dokumenId, versionId, { download } = {}) =>
+  openUrlInNewTab(() => getDokumenVersiUrl(dokumenId, versionId, { download }));
+
 let detailModalEl = null;
+let currentDetailDokumenId = null;
 
 const buildDetailModal = () => {
   const el = document.createElement("div");
@@ -169,19 +184,49 @@ const buildDetailModal = () => {
   el.tabIndex = -1;
   el.setAttribute("aria-hidden", "true");
   el.innerHTML = `
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">Detail Dokumen</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
         </div>
-        <div class="modal-body" id="dokumen-detail-body"></div>
+        <div class="modal-body">
+          <dl class="row mb-0" id="dokumen-detail-metadata"></dl>
+          <hr />
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">Riwayat Versi</h6>
+            <button id="dokumen-versi-upload-btn" class="btn btn-sm btn-primary d-none" type="button">
+              + Unggah Versi Baru
+            </button>
+          </div>
+          <div id="dokumen-versi-list"></div>
+        </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
         </div>
       </div>
     </div>`;
   document.body.appendChild(el);
+
+  document.getElementById("dokumen-versi-upload-btn").addEventListener("click", () => {
+    if (currentDetailDokumenId) {
+      openUploadVersiModal(currentDetailDokumenId);
+    }
+  });
+
+  document.getElementById("dokumen-versi-list").addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-action]");
+    if (!btn || !currentDetailDokumenId) {
+      return;
+    }
+    const { action, versionid } = btn.dataset;
+    if (action === "preview-versi") {
+      openVersiUrlInNewTab(currentDetailDokumenId, versionid);
+    } else if (action === "download-versi") {
+      openVersiUrlInNewTab(currentDetailDokumenId, versionid, { download: true });
+    }
+  });
+
   return el;
 };
 
@@ -189,31 +234,126 @@ const detailRow = (label, value) => `
   <dt class="col-5">${escapeHtml(label)}</dt>
   <dd class="col-7">${value}</dd>`;
 
+// `activeNomorVersi` highlights the currently active row — derived from the
+// list itself (the highest nomorVersi returned), since the API deliberately
+// doesn't expose `dokumen.versiAktif` to keep POST /dokumen's response shape
+// unchanged.
+const versiColumns = (activeNomorVersi) => [
+  {
+    key: "nomorVersi",
+    label: "Versi",
+    render: (row) =>
+      row.nomorVersi === activeNomorVersi
+        ? `#${row.nomorVersi} <span class="badge text-bg-success">Aktif</span>`
+        : `#${row.nomorVersi}`,
+  },
+  { key: "namaFileAsli", label: "Nama Berkas" },
+  { key: "ukuranFile", label: "Ukuran", render: (row) => formatFileSize(row.ukuranFile) },
+  { key: "createdAt", label: "Diunggah", render: (row) => formatDateTime(row.createdAt) },
+  {
+    key: "actions",
+    label: "",
+    render: (row) => `
+      <button class="btn btn-sm btn-outline-primary me-1" data-action="preview-versi" data-versionid="${row.id}" type="button">Preview</button>
+      <button class="btn btn-sm btn-outline-dark" data-action="download-versi" data-versionid="${row.id}" type="button">Unduh</button>
+    `,
+  },
+];
+
+const loadVersiList = async (dokumenId) => {
+  const listEl = document.getElementById("dokumen-versi-list");
+  renderTable(listEl, { columns: versiColumns(0), rows: [], loading: true });
+
+  try {
+    const res = await listDokumenVersi(dokumenId);
+    const activeNomorVersi = res.data.length > 0 ? Math.max(...res.data.map((v) => v.nomorVersi)) : 0;
+    renderTable(listEl, {
+      columns: versiColumns(activeNomorVersi),
+      rows: res.data,
+      emptyMessage: "Belum ada riwayat versi",
+    });
+  } catch (err) {
+    renderErrorState(listEl, err.message || "Gagal memuat riwayat versi");
+  }
+};
+
+// Re-fetches and re-renders just the metadata block — used both on initial
+// open and after a new version upload, since the mirror-on-write columns
+// (namaFileAsli/mimeType/ukuranFile) on `dokumen` change with every version.
+const refreshDetailMetadata = async (id) => {
+  const res = await getDokumen(id);
+  const d = res.data;
+
+  const rows = [];
+  if (canManage()) {
+    rows.push(detailRow("Pegawai", escapeHtml(pegawaiMap[d.pegawaiId] || d.pegawaiId)));
+  }
+  rows.push(
+    detailRow("Nama Dokumen", escapeHtml(d.namaDokumen)),
+    detailRow("Kategori", escapeHtml(kategoriMap[d.kategoriDokumenId] || "-")),
+    detailRow("Nama Berkas Asli (Versi Aktif)", escapeHtml(d.namaFileAsli)),
+    detailRow("Tipe Berkas", escapeHtml(MIME_LABELS[d.mimeType] || d.mimeType)),
+    detailRow("Ukuran Berkas", formatFileSize(d.ukuranFile)),
+    detailRow("Diunggah Pada", formatDateTime(d.createdAt)),
+    detailRow("Terakhir Diubah", formatDateTime(d.updatedAt)),
+  );
+
+  document.getElementById("dokumen-detail-metadata").innerHTML = rows.join("");
+};
+
 const openDetailModal = async (id) => {
   try {
-    const res = await getDokumen(id);
-    const d = res.data;
     const el = detailModalEl || (detailModalEl = buildDetailModal());
+    currentDetailDokumenId = id;
 
-    const rows = [];
-    if (canManage()) {
-      rows.push(detailRow("Pegawai", escapeHtml(pegawaiMap[d.pegawaiId] || d.pegawaiId)));
-    }
-    rows.push(
-      detailRow("Nama Dokumen", escapeHtml(d.namaDokumen)),
-      detailRow("Kategori", escapeHtml(kategoriMap[d.kategoriDokumenId] || "-")),
-      detailRow("Nama Berkas Asli", escapeHtml(d.namaFileAsli)),
-      detailRow("Tipe Berkas", escapeHtml(MIME_LABELS[d.mimeType] || d.mimeType)),
-      detailRow("Ukuran Berkas", formatFileSize(d.ukuranFile)),
-      detailRow("Diunggah Pada", formatDateTime(d.createdAt)),
-      detailRow("Terakhir Diubah", formatDateTime(d.updatedAt)),
-    );
+    await refreshDetailMetadata(id);
+    document.getElementById("dokumen-versi-upload-btn").classList.toggle("d-none", !canSubmit());
 
-    document.getElementById("dokumen-detail-body").innerHTML = `<dl class="row mb-0">${rows.join("")}</dl>`;
     window.bootstrap.Modal.getOrCreateInstance(el).show();
+    await loadVersiList(id);
   } catch (err) {
     showToast(err.message || "Gagal memuat detail dokumen", "danger");
   }
+};
+
+const openUploadVersiModal = (dokumenId) => {
+  openFormModal({
+    title: "Unggah Versi Baru",
+    submitLabel: "Unggah",
+    fields: [
+      {
+        name: "file",
+        label: "Berkas",
+        type: "file",
+        required: true,
+        helpText: "Tipe yang didukung: PDF, JPG, PNG, DOC, DOCX. Ukuran maksimum 10MB.",
+      },
+    ],
+    onSubmit: async (values) => {
+      const file = values.file;
+      if (!file || file.size === 0) {
+        throw new Error("Berkas wajib diunggah");
+      }
+      if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+        throw new Error("Tipe berkas tidak didukung. Gunakan PDF, JPG, PNG, DOC, atau DOCX.");
+      }
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        throw new Error("Ukuran berkas melebihi batas maksimum (10MB)");
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      await createDokumenVersi(dokumenId, formData);
+      showToast("Versi baru berhasil diunggah", "success");
+      await loadVersiList(dokumenId);
+      // Mirror metadata (nama berkas/tipe/ukuran) on the parent document
+      // changed — refresh both the still-open detail modal and the main
+      // table so they reflect the new active version too.
+      await refreshDetailMetadata(dokumenId);
+      await load();
+    },
+  });
 };
 
 const uploadFormFields = () => {

@@ -23,3 +23,19 @@ export const getDokumenUrl = (id, { download } = {}) => {
   const params = download ? "?download=1" : "";
   return apiFetch(`/dokumen/${id}/download${params}`);
 };
+
+// Version history — Stage 4B (FR-DOC-004/005).
+export const listDokumenVersi = (dokumenId, { page = 1, limit = 100 } = {}) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  return apiFetch(`/dokumen/${dokumenId}/versi?${params.toString()}`);
+};
+
+// `payload` is a FormData instance containing only `file` — the version
+// always belongs to the same pegawai/kategori as the parent document.
+export const createDokumenVersi = (dokumenId, payload) =>
+  apiFetch(`/dokumen/${dokumenId}/versi`, { method: "POST", body: payload });
+
+export const getDokumenVersiUrl = (dokumenId, versionId, { download } = {}) => {
+  const params = download ? "?download=1" : "";
+  return apiFetch(`/dokumen/${dokumenId}/versi/${versionId}/download${params}`);
+};
