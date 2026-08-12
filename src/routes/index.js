@@ -6,6 +6,8 @@ const divisiRoutes = require("../modules/divisi/divisi.routes");
 const jabatanRoutes = require("../modules/jabatan/jabatan.routes");
 const absensiRoutes = require("../modules/absensi/absensi.routes");
 const cutiRoutes = require("../modules/cuti/cuti.routes");
+const kategoriDokumenRoutes = require("../modules/kategoriDokumen/kategoriDokumen.routes");
+const dokumenRoutes = require("../modules/dokumen/dokumen.routes");
 
 const router = Router();
 
@@ -16,5 +18,7 @@ router.use("/divisi", divisiRoutes);
 router.use("/jabatan", jabatanRoutes);
 router.use("/absensi", absensiRoutes);
 router.use("/cuti", cutiRoutes);
+router.use("/kategori-dokumen", kategoriDokumenRoutes);
+router.use("/dokumen", dokumenRoutes);
 
 module.exports = router;
