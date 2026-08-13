@@ -120,4 +120,13 @@ const downloadVersi = async (req, res, next) => {
   }
 };
 
-module.exports = { list, detail, create, download, listVersi, createVersi, downloadVersi };
+const remove = async (req, res, next) => {
+  try {
+    await dokumenService.deleteDokumen(req.params.id);
+    responseHelper.success(res, { message: "Dokumen berhasil dihapus", data: null });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { list, detail, create, download, listVersi, createVersi, downloadVersi, remove };

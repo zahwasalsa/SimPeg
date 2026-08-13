@@ -80,4 +80,22 @@ const updateJabatan = async (id, { namaJabatan, deskripsi }) => {
   }
 };
 
-module.exports = { listJabatan, getJabatanById, createJabatan, updateJabatan };
+const deleteJabatan = async (id) => {
+  const existing = await jabatanRepository.findById(id);
+  if (!existing) {
+    throw new AppError("Jabatan tidak ditemukan", 404);
+  }
+
+  const isInUse = await jabatanRepository.hasPegawai(id);
+  if (isInUse) {
+    throw new AppError("Jabatan masih digunakan oleh pegawai, tidak dapat dihapus", 409);
+  }
+
+  const deleted = await jabatanRepository.softDelete(id);
+  if (!deleted) {
+    throw new AppError("Jabatan tidak ditemukan", 404);
+  }
+  logger.info("Jabatan deleted", { jabatanId: id });
+};
+
+module.exports = { listJabatan, getJabatanById, createJabatan, updateJabatan, deleteJabatan };

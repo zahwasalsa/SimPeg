@@ -78,4 +78,33 @@ const update = async (id, payload) => {
   return data;
 };
 
-module.exports = { findAll, findById, findByNama, create, update };
+const softDelete = async (id) => {
+  const { data, error } = await supabase
+    .from("jabatan")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select(SELECT_COLUMNS)
+    .single();
+  if (error) {
+    return null;
+  }
+  return data;
+};
+
+// Referential-integrity guard for delete: jabatan has no DB-level FK
+// CASCADE behavior to enforce here (soft delete never fires one anyway),
+// so the check is done at the app layer instead.
+const hasPegawai = async (jabatanId) => {
+  const { count, error } = await supabase
+    .from("pegawai")
+    .select("id", { count: "exact", head: true })
+    .eq("jabatan_id", jabatanId)
+    .is("deleted_at", null);
+  if (error) {
+    throw error;
+  }
+  return count > 0;
+};
+
+module.exports = { findAll, findById, findByNama, create, update, softDelete, hasPegawai };

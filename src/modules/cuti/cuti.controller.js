@@ -91,4 +91,13 @@ const cancel = async (req, res, next) => {
   }
 };
 
-module.exports = { list, detail, create, approve, reject, cancel };
+const remove = async (req, res, next) => {
+  try {
+    await cutiService.deleteCuti(req.params.id);
+    responseHelper.success(res, { message: "Data cuti berhasil dihapus", data: null });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { list, detail, create, approve, reject, cancel, remove };

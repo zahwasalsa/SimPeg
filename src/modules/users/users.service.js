@@ -56,4 +56,24 @@ const changeStatus = async ({ targetId, isActive, actorId }) => {
   return sanitizeUser(updated);
 };
 
-module.exports = { listUsers, getUserById, changeRole, changeStatus };
+// Self-delete is blocked outright (not just warned, unlike self-deactivate)
+// since it's the one action here that isn't reversible through the app UI —
+// only PATCH /users/:id/status has a self-lockout warning-but-allow path.
+const deleteUser = async ({ targetId, actorId }) => {
+  if (targetId === actorId) {
+    throw new AppError("Anda tidak dapat menghapus akun Anda sendiri", 400);
+  }
+
+  const existing = await usersRepository.findById(targetId);
+  if (!existing) {
+    throw new AppError("Pengguna tidak ditemukan", 404);
+  }
+
+  const deleted = await usersRepository.softDelete(targetId);
+  if (!deleted) {
+    throw new AppError("Pengguna tidak ditemukan", 404);
+  }
+  logger.info("User deleted", { targetId, actorId });
+};
+
+module.exports = { listUsers, getUserById, changeRole, changeStatus, deleteUser };

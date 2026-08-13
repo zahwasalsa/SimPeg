@@ -6,7 +6,7 @@ import { openFormModal } from "../components/modalForm.js";
 import { renderStatusBadge } from "../components/statusBadge.js";
 import { showToast } from "../components/toast.js";
 import { escapeHtml, formatDate, formatDateTime } from "../utils/format.js";
-import { listPegawai, getPegawai, createPegawai, updatePegawai } from "../api/pegawai.js";
+import { listPegawai, getPegawai, createPegawai, updatePegawai, deletePegawai } from "../api/pegawai.js";
 import { listDivisi } from "../api/divisi.js";
 import { listJabatan } from "../api/jabatan.js";
 
@@ -36,9 +36,10 @@ const STATUS_VARIANTS = {
 const tableEl = document.getElementById("pegawai-table");
 const paginationEl = document.getElementById("pegawai-pagination");
 const searchInput = document.getElementById("pegawai-search");
+const filterDivisiEl = document.getElementById("pegawai-filter-divisi");
 const addBtn = document.getElementById("pegawai-add-btn");
 
-const state = { page: 1, limit: 10, search: "" };
+const state = { page: 1, limit: 10, search: "", divisiId: "" };
 let currentUser = null;
 let divisiOptions = [];
 let jabatanOptions = [];
@@ -67,6 +68,13 @@ const loadLookups = async () => {
   jabatanOptions = jabatanRes.data.map((j) => ({ value: j.id, label: j.namaJabatan }));
   divisiMap = Object.fromEntries(divisiRes.data.map((d) => [d.id, d.namaDivisi]));
   jabatanMap = Object.fromEntries(jabatanRes.data.map((j) => [j.id, j.namaJabatan]));
+
+  divisiOptions.forEach((opt) => {
+    const optionEl = document.createElement("option");
+    optionEl.value = opt.value;
+    optionEl.textContent = opt.label;
+    filterDivisiEl.appendChild(optionEl);
+  });
 };
 
 const columns = () => {
@@ -85,7 +93,8 @@ const columns = () => {
       label: "",
       render: (row) => `
         <button class="btn btn-sm btn-outline-secondary me-1" data-action="detail" data-id="${row.id}" type="button">Detail</button>
-        ${canManage() ? `<button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${row.id}" type="button">Edit</button>` : ""}
+        ${canManage() ? `<button class="btn btn-sm btn-outline-primary me-1" data-action="edit" data-id="${row.id}" type="button">Edit</button>` : ""}
+        ${canManage() ? `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-name="${escapeHtml(row.namaLengkap)}" type="button">Hapus</button>` : ""}
       `,
     },
   ];
@@ -98,11 +107,19 @@ const load = async () => {
   paginationEl.innerHTML = "";
 
   try {
-    const res = await listPegawai({ page: state.page, limit: state.limit, search: state.search });
+    const res = await listPegawai({
+      page: state.page,
+      limit: state.limit,
+      search: state.search,
+      divisiId: state.divisiId || undefined,
+    });
     renderTable(tableEl, {
       columns: columns(),
       rows: res.data,
-      emptyMessage: state.search ? "Tidak ada pegawai yang cocok dengan pencarian" : "Belum ada data pegawai",
+      emptyMessage:
+        state.search || state.divisiId
+          ? "Tidak ada pegawai yang cocok dengan filter"
+          : "Belum ada data pegawai",
     });
     renderPagination(paginationEl, res.pagination, (page) => {
       state.page = page;
@@ -205,6 +222,19 @@ const openEditModal = async (id) => {
   }
 };
 
+const handleDelete = async (id, namaLengkap) => {
+  if (!window.confirm(`Hapus pegawai "${namaLengkap}"? Data akan disembunyikan dari daftar.`)) {
+    return;
+  }
+  try {
+    await deletePegawai(id);
+    showToast("Pegawai berhasil dihapus", "success");
+    await load();
+  } catch (err) {
+    showToast(err.message || "Gagal menghapus pegawai", "danger");
+  }
+};
+
 let detailModalEl = null;
 
 const buildDetailModal = () => {
@@ -293,6 +323,11 @@ const init = async () => {
     const detailBtn = event.target.closest("[data-action='detail']");
     if (detailBtn) {
       openDetailModal(detailBtn.dataset.id);
+      return;
+    }
+    const deleteBtn = event.target.closest("[data-action='delete']");
+    if (deleteBtn) {
+      handleDelete(deleteBtn.dataset.id, deleteBtn.dataset.name);
     }
   });
 
@@ -304,6 +339,12 @@ const init = async () => {
       state.page = 1;
       load();
     }, 400);
+  });
+
+  filterDivisiEl.addEventListener("change", () => {
+    state.divisiId = filterDivisiEl.value;
+    state.page = 1;
+    load();
   });
 
   await load();

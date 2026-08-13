@@ -12,3 +12,5 @@ export const updateUserRole = (id, payload) =>
 
 export const updateUserStatus = (id, payload) =>
   apiFetch(`/users/${id}/status`, { method: "PATCH", body: payload });
+
+export const deleteUser = (id) => apiFetch(`/users/${id}`, { method: "DELETE" });

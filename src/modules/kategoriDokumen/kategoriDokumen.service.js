@@ -80,9 +80,28 @@ const updateKategoriDokumen = async (id, { namaKategori, deskripsi }) => {
   }
 };
 
+const deleteKategoriDokumen = async (id) => {
+  const existing = await kategoriDokumenRepository.findById(id);
+  if (!existing) {
+    throw new AppError("Kategori dokumen tidak ditemukan", 404);
+  }
+
+  const isInUse = await kategoriDokumenRepository.hasDokumen(id);
+  if (isInUse) {
+    throw new AppError("Kategori dokumen masih digunakan oleh dokumen, tidak dapat dihapus", 409);
+  }
+
+  const deleted = await kategoriDokumenRepository.softDelete(id);
+  if (!deleted) {
+    throw new AppError("Kategori dokumen tidak ditemukan", 404);
+  }
+  logger.info("Kategori dokumen deleted", { kategoriDokumenId: id });
+};
+
 module.exports = {
   listKategoriDokumen,
   getKategoriDokumenById,
   createKategoriDokumen,
   updateKategoriDokumen,
+  deleteKategoriDokumen,
 };

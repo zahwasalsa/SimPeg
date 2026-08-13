@@ -6,7 +6,7 @@ import { openFormModal } from "../components/modalForm.js";
 import { renderStatusBadge } from "../components/statusBadge.js";
 import { showToast } from "../components/toast.js";
 import { escapeHtml, formatDate } from "../utils/format.js";
-import { listAbsensi, getAbsensi, createAbsensi, updateAbsensi } from "../api/absensi.js";
+import { listAbsensi, getAbsensi, createAbsensi, updateAbsensi, deleteAbsensi } from "../api/absensi.js";
 import { listPegawai } from "../api/pegawai.js";
 
 const STAFF_ROLES = ["admin", "hrd"];
@@ -96,8 +96,10 @@ const columns = () => {
     base.push({
       key: "actions",
       label: "",
-      render: (row) =>
-        `<button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${row.id}" type="button">Edit</button>`,
+      render: (row) => `
+        <button class="btn btn-sm btn-outline-primary me-1" data-action="edit" data-id="${row.id}" type="button">Edit</button>
+        <button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-name="${escapeHtml(formatDate(row.tanggal))}" type="button">Hapus</button>
+      `,
     });
   }
 
@@ -249,6 +251,19 @@ const openEditModal = async (id) => {
   }
 };
 
+const handleDelete = async (id, tanggal) => {
+  if (!window.confirm(`Hapus data absensi tanggal ${tanggal}? Data akan disembunyikan dari daftar.`)) {
+    return;
+  }
+  try {
+    await deleteAbsensi(id);
+    showToast("Absensi berhasil dihapus", "success");
+    await load();
+  } catch (err) {
+    showToast(err.message || "Gagal menghapus absensi", "danger");
+  }
+};
+
 const init = async () => {
   currentUser = await requireAuth();
   if (!currentUser) {
@@ -276,6 +291,11 @@ const init = async () => {
     const editBtn = event.target.closest("[data-action='edit']");
     if (editBtn) {
       openEditModal(editBtn.dataset.id);
+      return;
+    }
+    const deleteBtn = event.target.closest("[data-action='delete']");
+    if (deleteBtn) {
+      handleDelete(deleteBtn.dataset.id, deleteBtn.dataset.name);
     }
   });
 

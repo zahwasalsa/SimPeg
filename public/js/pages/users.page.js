@@ -6,7 +6,7 @@ import { openFormModal } from "../components/modalForm.js";
 import { renderStatusBadge } from "../components/statusBadge.js";
 import { showToast } from "../components/toast.js";
 import { escapeHtml, formatDate, formatDateTime } from "../utils/format.js";
-import { listUsers, getUser, updateUserRole, updateUserStatus } from "../api/users.js";
+import { listUsers, getUser, updateUserRole, updateUserStatus, deleteUser } from "../api/users.js";
 
 const ADMIN_ONLY = ["admin"];
 
@@ -51,7 +51,12 @@ const columns = () => [
     render: (row) => `
       <button class="btn btn-sm btn-outline-secondary me-1" data-action="detail" data-id="${row.id}" type="button">Detail</button>
       <button class="btn btn-sm btn-outline-primary me-1" data-action="role" data-id="${row.id}" type="button">Ubah Role</button>
-      <button class="btn btn-sm btn-outline-dark" data-action="status" data-id="${row.id}" type="button">Ubah Status</button>
+      <button class="btn btn-sm btn-outline-dark me-1" data-action="status" data-id="${row.id}" type="button">Ubah Status</button>
+      ${
+        isSelf(row.id)
+          ? ""
+          : `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-email="${escapeHtml(row.email)}" type="button">Hapus</button>`
+      }
     `,
   },
 ];
@@ -233,6 +238,19 @@ const openStatusModal = async (id) => {
   }
 };
 
+const handleDelete = async (id, email) => {
+  if (!window.confirm(`Hapus user "${email}"? Akun ini tidak akan bisa login lagi setelah dihapus.`)) {
+    return;
+  }
+  try {
+    await deleteUser(id);
+    showToast("User berhasil dihapus", "success");
+    await load();
+  } catch (err) {
+    showToast(err.message || "Gagal menghapus user", "danger");
+  }
+};
+
 const init = async () => {
   currentUser = await requireAuth();
   if (!currentUser) {
@@ -256,6 +274,8 @@ const init = async () => {
       openRoleModal(id);
     } else if (action === "status") {
       openStatusModal(id);
+    } else if (action === "delete") {
+      handleDelete(id, btn.dataset.email);
     }
   });
 

@@ -88,6 +88,9 @@ test("GET /api/v1/auth/me - returns the logged-in user's profile", async () => {
   assert.equal(res.status, 200);
   assert.equal(res.body.data.email, testEmail);
   assert.equal(res.body.data.role, "pegawai");
+  // This account was created via /auth/register only — no linked pegawai
+  // row exists, so pegawaiId must resolve to null (not omitted, not 404).
+  assert.equal(res.body.data.pegawaiId, null);
 });
 
 test("POST /api/v1/auth/refresh - exchanges refresh token for a new session", async () => {

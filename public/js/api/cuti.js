@@ -27,3 +27,5 @@ export const approveCuti = (id, payload = {}) =>
 export const rejectCuti = (id, payload) => apiFetch(`/cuti/${id}/reject`, { method: "PATCH", body: payload });
 
 export const cancelCuti = (id) => apiFetch(`/cuti/${id}/cancel`, { method: "PATCH", body: {} });
+
+export const deleteCuti = (id) => apiFetch(`/cuti/${id}`, { method: "DELETE" });

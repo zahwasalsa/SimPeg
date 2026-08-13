@@ -39,3 +39,5 @@ export const getDokumenVersiUrl = (dokumenId, versionId, { download } = {}) => {
   const params = download ? "?download=1" : "";
   return apiFetch(`/dokumen/${dokumenId}/versi/${versionId}/download${params}`);
 };
+
+export const deleteDokumen = (id) => apiFetch(`/dokumen/${id}`, { method: "DELETE" });

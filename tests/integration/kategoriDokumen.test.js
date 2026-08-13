@@ -199,3 +199,46 @@ test("PATCH /kategori-dokumen/:id - non-existent id returns 404", async () => {
     .send({ deskripsi: "Ghost" });
   assert.equal(res.status, 404);
 });
+
+// --- DELETE /api/v1/kategori-dokumen/:id ---
+
+test("DELETE /kategori-dokumen/:id - pegawai and pimpinan cannot delete (403)", async () => {
+  for (const role of ["pegawai", "pimpinan"]) {
+    const res = await request(app)
+      .delete(`/api/v1/kategori-dokumen/${kategoriBId}`)
+      .set("Authorization", `Bearer ${accounts[role].token}`);
+    assert.equal(res.status, 403, `expected 403 for role ${role}`);
+  }
+});
+
+test("DELETE /kategori-dokumen/:id - non-existent id returns 404", async () => {
+  const res = await request(app)
+    .delete("/api/v1/kategori-dokumen/00000000-0000-0000-0000-000000000000")
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 404);
+});
+
+test("DELETE /kategori-dokumen/:id - admin can delete, then it's hidden from list and detail (404)", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/kategori-dokumen/${kategoriBId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data, null);
+
+  const detailRes = await request(app)
+    .get(`/api/v1/kategori-dokumen/${kategoriBId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(detailRes.status, 404);
+
+  const listRes = await request(app)
+    .get("/api/v1/kategori-dokumen?page=1&limit=100")
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.ok(!listRes.body.data.some((k) => k.id === kategoriBId));
+});
+
+test("DELETE /kategori-dokumen/:id - deleting an already-deleted kategori returns 404", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/kategori-dokumen/${kategoriBId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 404);
+});

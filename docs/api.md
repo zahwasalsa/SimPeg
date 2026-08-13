@@ -203,9 +203,14 @@ Response 200
 {
   "success": true,
   "message": "OK",
-  "data": { "id": "uuid", "email": "...", "role": "pegawai", "isActive": true, "lastLogin": "...", "createdAt": "..." }
+  "data": { "id": "uuid", "email": "...", "role": "pegawai", "isActive": true, "lastLogin": "...",
+    "createdAt": "...", "pegawaiId": "uuid atau null" }
 }
 ```
+
+`pegawaiId` adalah id baris `pegawai` yang tertaut ke akun ini (`null` jika akun belum punya profil
+pegawai) — dipakai frontend untuk memuat/mengedit profil pegawai milik sendiri lewat
+`GET/PATCH /pegawai/{pegawaiId}` tanpa round-trip tambahan.
 
 Error
 
@@ -276,9 +281,10 @@ project (lihat catatan penamaan Indonesia di Bagian 20). Seluruh endpoint memerl
 
 `:id` pada endpoint di bawah adalah `pegawai.id` (primary key tabel `pegawai`), **bukan** `users.id`.
 
-Tidak ada endpoint `DELETE /pegawai/{id}`. Menonaktifkan pegawai dilakukan lewat
-`PATCH /pegawai/{id}` dengan `{ "statusKepegawaian": "nonaktif" }`, memakai kolom yang sudah ada —
-tidak ada penghapusan data maupun perubahan skema.
+Menonaktifkan pegawai (tanpa menyembunyikannya dari daftar) dilakukan lewat `PATCH /pegawai/{id}`
+dengan `{ "statusKepegawaian": "nonaktif" }`. `DELETE /pegawai/{id}` adalah aksi terpisah — soft
+delete (mengisi `deleted_at`), menyembunyikan baris dari seluruh query yang ada, **admin/hrd only**
+(tidak ada self-delete).
 
 Response tidak pernah menyertakan data dari tabel `users` (email, password_hash, dll).
 
@@ -361,11 +367,18 @@ Error
 
 ## PATCH /pegawai/{id}
 
-Partial update. **Admin dan HRD only** — tidak ada self-service update, bahkan untuk profil sendiri.
+Partial update.
+
+- **Admin/HRD**: boleh mengubah profil siapa pun, seluruh field.
+- **Pegawai/Pimpinan**: boleh mengubah **profil milik sendiri saja** (dicek lewat
+  `pegawai.user_id === req.user.id`, sama seperti `GET /pegawai/{id}`), dan **hanya field personal**:
+  `jenisKelamin`, `tempatLahir`, `tanggalLahir`, `alamat`, `noTelepon`. Mengirim field organisasi
+  (`nip`, `namaLengkap`, `divisiId`, `jabatanId`, `statusKepegawaian`) sebagai self-editor ditolak `403`
+  — field tersebut tetap eksklusif admin/HRD karena memengaruhi catatan resmi kepegawaian, bukan data
+  pribadi individu.
 
 `userId` **tidak boleh** dikirim di body sama sekali (request langsung ditolak `422` jika ada) — relasi
-ke akun Supabase Auth bersifat permanen setelah dibuat. Field lain (termasuk `nip`, untuk koreksi data)
-boleh diperbarui sebagian.
+ke akun Supabase Auth bersifat permanen setelah dibuat.
 
 Request body (semua field opsional, kirim yang ingin diubah saja)
 
@@ -375,60 +388,167 @@ Request body (semua field opsional, kirim yang ingin diubah saja)
 
 Response 200 — objek pegawai
 
-Error: `401`, `403` bukan admin/HRD, `404` pegawai/divisi/jabatan tidak ditemukan, `409` `nip` sudah
-dipakai pegawai lain, `422` field tidak valid atau `userId` disertakan
+Error: `401`, `403` (bukan admin/HRD dan bukan pemilik profil, **atau** self-editor mengirim field
+organisasi), `404` pegawai/divisi/jabatan tidak ditemukan, `409` `nip` sudah dipakai pegawai lain,
+`422` field tidak valid atau `userId` disertakan
 
 ---
 
-# 7. Unit Kerja
+## DELETE /pegawai/{id}
 
-GET
+**Admin/HRD only** — soft delete (mengisi `deleted_at`), tidak menghapus baris secara permanen dan
+tidak mengubah `statusKepegawaian`. Tidak ada guard dependensi (tabel anak seperti `absensi`/`cuti`/
+`dokumen` tetap memiliki riwayatnya, hanya tidak lagi bisa dijangkau lewat pegawai yang sudah
+disembunyikan ini).
 
-/work-units
+Response 200
 
----
+```json
+{ "success": true, "message": "Pegawai berhasil dihapus", "data": null }
+```
 
-POST
-
-/work-units
-
----
-
-PUT
-
-/work-units/{id}
+Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan (termasuk jika sudah dihapus sebelumnya),
+`422` id bukan UUID
 
 ---
 
-DELETE
+# 7. Unit Kerja (Divisi)
 
-/work-units/{id}
+Diimplementasikan pada Phase 4 (Master Data). Path aktual `/divisi` (bukan `/work-units`). Seluruh
+endpoint memerlukan `Authorization: Bearer <accessToken>`. Membaca (`GET`) terbuka untuk semua role
+terautentikasi; menulis (`POST`/`PATCH`/`DELETE`) **admin/HRD only**.
+
+---
+
+## GET /divisi
+
+Query params: `page` (default 1), `limit` (default 10, maks 100), `search` (cocok ke `nama_divisi`,
+`ilike`)
+
+Response 200 (format pagination, lihat Bagian 3). Error: `401` tanpa token
+
+---
+
+## GET /divisi/{id}
+
+Response 200
+
+```json
+{
+  "success": true,
+  "message": "Detail divisi",
+  "data": { "id": "uuid", "namaDivisi": "...", "deskripsi": null, "createdAt": "...", "updatedAt": "..." }
+}
+```
+
+Error: `401`, `404` tidak ditemukan, `422` id bukan UUID
+
+---
+
+## POST /divisi
+
+**Admin/HRD only.**
+
+```json
+{ "namaDivisi": "Fakultas Teknik", "deskripsi": "opsional" }
+```
+
+Response 201 — objek divisi. Error: `401`, `403` bukan admin/HRD, `409` `namaDivisi` sudah terdaftar,
+`422` field tidak valid
+
+---
+
+## PATCH /divisi/{id}
+
+**Admin/HRD only.** Body sebagian (`namaDivisi` dan/atau `deskripsi`).
+
+Response 200. Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `409` `namaDivisi` bentrok,
+`422` field tidak valid
+
+---
+
+## DELETE /divisi/{id}
+
+**Admin/HRD only.** Soft delete (mengisi `deleted_at`). **Diblokir `409`** selama masih ada pegawai
+(`deleted_at IS NULL`) yang `divisiId`-nya menunjuk ke divisi ini — pindahkan/kosongkan `divisiId`
+pegawai tersebut dulu lewat `PATCH /pegawai/{id}` sebelum menghapus divisinya.
+
+Response 200
+
+```json
+{ "success": true, "message": "Divisi berhasil dihapus", "data": null }
+```
+
+Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `409` masih digunakan oleh pegawai,
+`422` id bukan UUID
 
 ---
 
 # 8. Jabatan
 
-GET
-
-/positions
-
----
-
-POST
-
-/positions
+Diimplementasikan pada Phase 4 (Master Data). Path aktual `/jabatan` (bukan `/positions`). Pola
+endpoint, permission, dan perilaku delete **identik** dengan Bagian 7 (Divisi) di atas — hanya nama
+tabel/kolom yang berbeda (`jabatan`/`nama_jabatan`, guard dependensi lewat `pegawai.jabatan_id`).
 
 ---
 
-PUT
+## GET /jabatan
 
-/positions/{id}
+Query params: `page`, `limit`, `search` (cocok ke `nama_jabatan`, `ilike`)
+
+Response 200 (format pagination). Error: `401` tanpa token
 
 ---
 
-DELETE
+## GET /jabatan/{id}
 
-/positions/{id}
+Response 200
+
+```json
+{
+  "success": true,
+  "message": "Detail jabatan",
+  "data": { "id": "uuid", "namaJabatan": "...", "deskripsi": null, "createdAt": "...", "updatedAt": "..." }
+}
+```
+
+Error: `401`, `404` tidak ditemukan, `422` id bukan UUID
+
+---
+
+## POST /jabatan
+
+**Admin/HRD only.**
+
+```json
+{ "namaJabatan": "Dosen", "deskripsi": "opsional" }
+```
+
+Response 201 — objek jabatan. Error: `401`, `403` bukan admin/HRD, `409` `namaJabatan` sudah
+terdaftar, `422` field tidak valid
+
+---
+
+## PATCH /jabatan/{id}
+
+**Admin/HRD only.** Body sebagian. Response 200. Error: `401`, `403` bukan admin/HRD, `404` tidak
+ditemukan, `409` `namaJabatan` bentrok, `422` field tidak valid
+
+---
+
+## DELETE /jabatan/{id}
+
+**Admin/HRD only.** Soft delete. **Diblokir `409`** selama masih ada pegawai yang `jabatanId`-nya
+menunjuk ke jabatan ini — sama seperti Divisi.
+
+Response 200
+
+```json
+{ "success": true, "message": "Jabatan berhasil dihapus", "data": null }
+```
+
+Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `409` masih digunakan oleh pegawai,
+`422` id bukan UUID
 
 ---
 
@@ -441,7 +561,8 @@ Service.
 
 `:id` pada endpoint di bawah adalah `absensi.id`, bukan `pegawai.id`.
 
-Tidak ada endpoint `DELETE`. Koreksi data hanya lewat `PATCH` (khusus admin/HRD).
+Koreksi data lewat `PATCH`, penghapusan lewat `DELETE` — keduanya **admin/HRD only**, pegawai tidak
+punya akses ke keduanya sama sekali (termasuk untuk data miliknya sendiri).
 
 Response tidak pernah menyertakan data dari tabel `users`/`pegawai` di luar `pegawaiId`, apalagi
 password/token/secret.
@@ -548,6 +669,21 @@ dengan baris lain milik pegawai yang sama, `422` field tidak valid / `jamKeluar 
 
 ---
 
+## DELETE /absensi/{id}
+
+**Admin/HRD only** — sama seperti PATCH, pegawai tidak punya akses sama sekali (`403`), termasuk untuk
+data miliknya sendiri. Soft delete (mengisi `deleted_at`), tidak ada guard dependensi.
+
+Response 200
+
+```json
+{ "success": true, "message": "Absensi berhasil dihapus", "data": null }
+```
+
+Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `422` id bukan UUID
+
+---
+
 # 8b. Cuti
 
 Diimplementasikan pada Phase 6 (Cuti Management). Path aktual `/cuti`. Seluruh endpoint memerlukan
@@ -556,10 +692,10 @@ Diimplementasikan pada Phase 6 (Cuti Management). Path aktual `/cuti`. Seluruh e
 
 `:id` pada endpoint di bawah adalah `cuti.id`, bukan `pegawai.id`.
 
-Tidak ada endpoint `DELETE` maupun `PATCH /cuti/{id}` generik. Approve/reject/cancel adalah *state
-transition* dengan efek samping spesifik, sehingga masing-masing punya sub-resource sendiri. Cuti yang
-sudah `disetujui`/`ditolak` tidak bisa diedit — kalau ada kesalahan, harus mengajukan baru (audit trail
-tetap jelas).
+Tidak ada endpoint `PATCH /cuti/{id}` generik. Approve/reject/cancel adalah *state transition* dengan
+efek samping spesifik, sehingga masing-masing punya sub-resource sendiri. Cuti yang sudah
+`disetujui`/`ditolak` tidak bisa diedit — kalau ada kesalahan, harus mengajukan baru (audit trail tetap
+jelas). `DELETE /cuti/{id}` ada, terpisah dari `cancel` — lihat di bawah.
 
 **Fitur saldo/jatah cuti tidak diimplementasikan** — tidak ada kolom/tabel pendukung di schema saat ini.
 
@@ -677,6 +813,24 @@ Error: `401`, `403` bukan admin/HRD dan bukan pemilik, `404` tidak ditemukan, `4
 
 ---
 
+## DELETE /cuti/{id}
+
+**Admin/HRD only, tidak ada self-service** — berbeda dari `cancel` di atas, `DELETE` **tidak
+mensyaratkan status tertentu**: cuti berstatus `diajukan`, `disetujui`, `ditolak`, maupun `dibatalkan`
+semuanya bisa dihapus (soft delete, mengisi `deleted_at`). Ini untuk membersihkan data yang keliru
+dari daftar, bukan bagian dari alur approval — pegawai yang ingin membatalkan pengajuan yang masih
+`diajukan` tetap memakai `PATCH /cuti/{id}/cancel`.
+
+Response 200
+
+```json
+{ "success": true, "message": "Data cuti berhasil dihapus", "data": null }
+```
+
+Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `422` id bukan UUID
+
+---
+
 # 9. Dokumen
 
 Diimplementasikan pada Phase 5 (Document Management), Stage 4A + Stage 4B. Path aktual `/dokumen` dan
@@ -684,8 +838,9 @@ Diimplementasikan pada Phase 5 (Document Management), Stage 4A + Stage 4B. Path 
 `Authorization: Bearer <accessToken>`. Role tidak pernah dicek di Controller — gate akses ada di
 `authMiddleware`/`authorize`/`dokumen.authorize.js`, scope data diputuskan di Service.
 
-`:id` pada endpoint di bawah adalah `dokumen.id`. Tidak ada endpoint `PATCH`/`DELETE` untuk `dokumen`
-maupun `dokumen_version` — riwayat versi bersifat immutable, tidak bisa diedit/dihapus lewat API.
+`:id` pada endpoint di bawah adalah `dokumen.id`. Tidak ada endpoint `PATCH` untuk `dokumen` maupun
+`PATCH`/`DELETE` untuk `dokumen_version` — riwayat versi bersifat immutable, tidak bisa diedit/dihapus
+lewat API. `DELETE /dokumen/{id}` **ada** (soft delete pada baris `dokumen` saja) — lihat di bawah.
 
 Kolom `dokumen.namaFileAsli`/`bucket`/`mimeType`/`ukuranFile` selalu mencerminkan **versi aktif**
 (diperbarui otomatis setiap kali versi baru diunggah) — `GET /dokumen`, `GET /dokumen/{id}`, dan
@@ -766,6 +921,23 @@ ada transaction lintas tabel di implementasi saat ini.
 Error: `401`, `403` (pimpinan, atau `pegawaiId` tanpa role admin/hrd), `404` (`pegawaiId`/
 `kategoriDokumenId` tidak ditemukan), `422` (field tidak valid, tipe berkas tidak didukung, berkas
 kosong, atau `pegawaiId` dikirim oleh pegawai), `422` ukuran berkas >10MB
+
+---
+
+## DELETE /dokumen/{id}
+
+**Admin/HRD atau pegawai pemilik dokumen** (sama seperti `GET /dokumen/{id}`/`download`, dicek lewat
+`dokumen.pegawai_id`). Soft delete **hanya pada baris `dokumen`** — berkas di Supabase Storage dan
+seluruh riwayat `dokumen_version` **tidak ikut terhapus**, tetap dapat dipulihkan lewat akses database
+langsung kalau diperlukan.
+
+Response 200
+
+```json
+{ "success": true, "message": "Dokumen berhasil dihapus", "data": null }
+```
+
+Error: `401`, `403` bukan admin/HRD dan bukan pemilik, `404` tidak ditemukan, `422` id bukan UUID
 
 ---
 
@@ -877,51 +1049,23 @@ bentrok, `422` field tidak valid.
 
 ---
 
-# 10. KPI
+## DELETE /kategori-dokumen/{id}
 
-GET
+**Admin/HRD only.** Soft delete. **Diblokir `409`** selama masih ada dokumen (`deleted_at IS NULL`)
+yang `kategoriDokumenId`-nya menunjuk ke kategori ini.
 
-/kpis
+Response 200
 
----
+```json
+{ "success": true, "message": "Kategori dokumen berhasil dihapus", "data": null }
+```
 
-GET
-
-/kpis/{id}
-
----
-
-POST
-
-/kpis
+Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `409` masih digunakan oleh dokumen,
+`422` id bukan UUID
 
 ---
 
-PUT
-
-/kpis/{id}
-
----
-
-DELETE
-
-/kpis/{id}
-
----
-
-GET
-
-/kpis/{id}/progress
-
----
-
-POST
-
-/kpis/{id}/progress
-
----
-
-# 11. Roadmap Karier
+# 10. Roadmap Karier
 
 GET
 
@@ -953,7 +1097,7 @@ DELETE
 
 ---
 
-# 12. Penelitian
+# 11. Penelitian
 
 GET
 
@@ -1009,7 +1153,7 @@ POST
 
 ---
 
-# 13. Sertifikasi
+# 12. Sertifikasi
 
 GET
 
@@ -1041,7 +1185,7 @@ DELETE
 
 ---
 
-# 14. Pelatihan
+# 13. Pelatihan
 
 GET
 
@@ -1073,7 +1217,7 @@ DELETE
 
 ---
 
-# 15. Layanan Administrasi
+# 14. Layanan Administrasi
 
 GET
 
@@ -1123,7 +1267,7 @@ Batalkan Pengajuan
 
 ---
 
-# 16. Approval
+# 15. Approval
 
 GET
 
@@ -1153,7 +1297,7 @@ Reject
 
 ---
 
-# 17. Sertifikasi & Pelatihan Reminder
+# 16. Sertifikasi & Pelatihan Reminder
 
 GET
 
@@ -1173,7 +1317,7 @@ GET
 
 ---
 
-# 18. Notification
+# 17. Notification
 
 GET
 
@@ -1199,7 +1343,7 @@ DELETE
 
 ---
 
-# 19. Activity Logs
+# 18. Activity Logs
 
 GET
 
@@ -1215,7 +1359,7 @@ GET
 
 ---
 
-# 20. Users
+# 19. Users
 
 Diimplementasikan pada Phase 2 (Role & User Management). Seluruh endpoint memerlukan
 `Authorization: Bearer <accessToken>` (`authMiddleware`) dan diproteksi `authorize`/`authorizeSelfOrRoles`
@@ -1310,7 +1454,26 @@ Error: `401`, `403` bukan admin, `404` tidak ditemukan, `422` `isActive` bukan b
 
 ---
 
-# 21. Roles
+## DELETE /users/{id}
+
+**Admin only.** Soft delete (mengisi `deleted_at`) — baris `public.users` langsung tidak lolos lookup
+`authMiddleware` pada request berikutnya (`401 Akun pengguna tidak ditemukan`), jadi efeknya setara
+menonaktifkan permanen, terlepas dari status `isActive` saat ini. **Menghapus akun sendiri ditolak
+`400`** (beda dari `PATCH .../status` yang mengizinkan self-deactivate dengan peringatan) — mencegah
+admin tidak sengaja mengunci diri sendiri tanpa jalan kembali lewat UI.
+
+Response 200
+
+```json
+{ "success": true, "message": "User berhasil dihapus", "data": null }
+```
+
+Error: `400` mencoba menghapus akun sendiri, `401`, `403` bukan admin, `404` tidak ditemukan,
+`422` id bukan UUID
+
+---
+
+# 20. Roles
 
 GET
 
@@ -1336,7 +1499,7 @@ DELETE
 
 ---
 
-# 22. Permissions
+# 21. Permissions
 
 GET
 
@@ -1362,7 +1525,7 @@ DELETE
 
 ---
 
-# 23. Master Data
+# 22. Master Data
 
 GET
 
@@ -1400,7 +1563,7 @@ GET
 
 ---
 
-# 24. Upload Rules
+# 23. Upload Rules
 
 Content-Type
 
@@ -1430,7 +1593,7 @@ Supabase Storage
 
 ---
 
-# 25. Authentication Rules
+# 24. Authentication Rules
 
 Public Endpoint
 
@@ -1446,7 +1609,7 @@ Bearer <access_token>
 
 ---
 
-# 26. HTTP Status
+# 25. HTTP Status
 
 200 OK
 
@@ -1470,7 +1633,7 @@ Bearer <access_token>
 
 ---
 
-# 27. API Versioning
+# 26. API Versioning
 
 Semua endpoint menggunakan
 
@@ -1482,7 +1645,7 @@ Perubahan breaking change menggunakan
 
 ---
 
-# 28. Error Code
+# 27. Error Code
 
 AUTH001
 
@@ -1504,10 +1667,6 @@ DOC001
 
 Dokumen Tidak Ditemukan
 
-KPI001
-
-KPI Tidak Ditemukan
-
 SRV001
 
 Pengajuan Tidak Ditemukan
@@ -1518,7 +1677,7 @@ Notifikasi Tidak Ditemukan
 
 ---
 
-# 29. API Documentation
+# 28. API Documentation
 
 Seluruh endpoint harus didokumentasikan menggunakan
 
@@ -1530,7 +1689,7 @@ Perubahan endpoint wajib memperbarui dokumentasi.
 
 ---
 
-# 30. Definition of Done
+# 29. Definition of Done
 
 Sebuah endpoint dianggap selesai apabila:
 

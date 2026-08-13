@@ -10,8 +10,14 @@ const ADMIN_ONLY = ["admin"];
 
 const MENU = [
   { label: "Dashboard", href: "/dashboard", roles: ALL_ROLES },
-  { label: "Divisi", href: "/divisi", roles: ALL_ROLES },
-  { label: "Jabatan", href: "/jabatan", roles: ALL_ROLES },
+  // Divisi/Jabatan are master data that only admin/hrd manage (create, rename,
+  // delete). Pegawai/pimpinan already see their own divisi & jabatan on their
+  // Profil page — they never need to browse the full org-wide list, so the
+  // link is hidden for them. GET /divisi and /jabatan stay open to every role
+  // at the backend (other pages, e.g. Pegawai's divisi/jabatan dropdowns,
+  // still rely on that) — this only hides the standalone browse/manage page.
+  { label: "Divisi", href: "/divisi", roles: MANAGE_ROLES },
+  { label: "Jabatan", href: "/jabatan", roles: MANAGE_ROLES },
   // GET /pegawai (list) is admin/hrd-only at the backend (pegawai/pimpinan
   // get 403) — the link is hidden for them rather than leading to a dead end.
   { label: "Pegawai", href: "/pegawai", roles: MANAGE_ROLES },

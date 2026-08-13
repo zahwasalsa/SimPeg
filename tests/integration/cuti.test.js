@@ -409,6 +409,47 @@ test("PATCH /cuti/:id/cancel - admin can cancel any pending request (200)", asyn
   assert.equal(res.body.data.status, "dibatalkan");
 });
 
+// --- DELETE /api/v1/cuti/:id ---
+
+test("DELETE /cuti/:id - pegawai cannot delete, even their own request (403)", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/cuti/${cutiAdminBackdatedId}`)
+    .set("Authorization", `Bearer ${accounts.pegawaiA.token}`);
+  assert.equal(res.status, 403);
+});
+
+test("DELETE /cuti/:id - non-existent id returns 404", async () => {
+  const res = await request(app)
+    .delete("/api/v1/cuti/00000000-0000-0000-0000-000000000000")
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 404);
+});
+
+test("DELETE /cuti/:id - admin can delete a non-pending record (rejected/cancelled), unlike cancel", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/cuti/${cutiHrdId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data, null);
+
+  const detailRes = await request(app)
+    .get(`/api/v1/cuti/${cutiHrdId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(detailRes.status, 404);
+
+  const listRes = await request(app)
+    .get("/api/v1/cuti?page=1&limit=100")
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.ok(!listRes.body.data.some((c) => c.id === cutiHrdId));
+});
+
+test("DELETE /cuti/:id - deleting an already-deleted record returns 404", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/cuti/${cutiHrdId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 404);
+});
+
 // --- Response sanitization ---
 
 test("Responses never leak password_hash, tokens, or secrets", async () => {

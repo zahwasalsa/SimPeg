@@ -15,3 +15,5 @@ export const createKategoriDokumen = (payload) =>
 
 export const updateKategoriDokumen = (id, payload) =>
   apiFetch(`/kategori-dokumen/${id}`, { method: "PATCH", body: payload });
+
+export const deleteKategoriDokumen = (id) => apiFetch(`/kategori-dokumen/${id}`, { method: "DELETE" });

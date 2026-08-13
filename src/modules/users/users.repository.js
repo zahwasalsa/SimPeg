@@ -62,4 +62,18 @@ const updateStatus = async (id, isActive) => {
   return data;
 };
 
-module.exports = { findAll, findById, updateRole, updateStatus };
+const softDelete = async (id) => {
+  const { data, error } = await supabase
+    .from("users")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select(SELECT_COLUMNS)
+    .single();
+  if (error) {
+    return null;
+  }
+  return data;
+};
+
+module.exports = { findAll, findById, updateRole, updateStatus, softDelete };

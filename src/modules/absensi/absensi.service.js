@@ -229,4 +229,17 @@ const updateAbsensi = async (id, { tanggal, jamMasuk, jamKeluar, status, keteran
   }
 };
 
-module.exports = { listAbsensi, getAbsensiById, createAbsensi, updateAbsensi };
+const deleteAbsensi = async (id) => {
+  const existing = await absensiRepository.findById(id);
+  if (!existing) {
+    throw new AppError("Data absensi tidak ditemukan", 404);
+  }
+
+  const deleted = await absensiRepository.softDelete(id);
+  if (!deleted) {
+    throw new AppError("Data absensi tidak ditemukan", 404);
+  }
+  logger.info("Absensi deleted", { absensiId: id });
+};
+
+module.exports = { listAbsensi, getAbsensiById, createAbsensi, updateAbsensi, deleteAbsensi };

@@ -13,3 +13,5 @@ export const getJabatan = (id) => apiFetch(`/jabatan/${id}`);
 export const createJabatan = (payload) => apiFetch("/jabatan", { method: "POST", body: payload });
 
 export const updateJabatan = (id, payload) => apiFetch(`/jabatan/${id}`, { method: "PATCH", body: payload });
+
+export const deleteJabatan = (id) => apiFetch(`/jabatan/${id}`, { method: "DELETE" });

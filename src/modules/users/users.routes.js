@@ -30,4 +30,7 @@ router.patch(
   controller.changeStatus,
 );
 
+// Soft delete; admin only. Self-delete is blocked in the Service (400).
+router.delete("/:id", authorize("admin"), validation.idParamValidation, validate, controller.remove);
+
 module.exports = router;

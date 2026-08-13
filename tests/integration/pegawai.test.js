@@ -247,11 +247,40 @@ test("PATCH /pegawai/:id - hrd can update", async () => {
   assert.equal(res.body.data.statusKepegawaian, "nonaktif");
 });
 
-test("PATCH /pegawai/:id - pegawai cannot update, even their own profile (403)", async () => {
+test("PATCH /pegawai/:id - pegawai self-editing an organizational field is rejected (403)", async () => {
   const res = await request(app)
     .patch(`/api/v1/pegawai/${pegawaiAProfileId}`)
     .set("Authorization", `Bearer ${accounts.pegawaiA.token}`)
     .send({ namaLengkap: "Self Edit Attempt" });
+  assert.equal(res.status, 403);
+});
+
+test("PATCH /pegawai/:id - pegawai can self-edit personal fields on their own profile (200)", async () => {
+  const res = await request(app)
+    .patch(`/api/v1/pegawai/${pegawaiAProfileId}`)
+    .set("Authorization", `Bearer ${accounts.pegawaiA.token}`)
+    .send({ alamat: "Jalan QA No. 1", noTelepon: "081200000000" });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.alamat, "Jalan QA No. 1");
+  assert.equal(res.body.data.noTelepon, "081200000000");
+});
+
+test("PATCH /pegawai/:id - pegawai cannot self-edit another pegawai's profile, even personal fields (403)", async () => {
+  const res = await request(app)
+    .patch(`/api/v1/pegawai/${pegawaiBProfileId}`)
+    .set("Authorization", `Bearer ${accounts.pegawaiA.token}`)
+    .send({ alamat: "Should not be allowed" });
+  assert.equal(res.status, 403);
+});
+
+test("PATCH /pegawai/:id - pimpinan without their own profile gets 404 self-editing personal fields", async () => {
+  // pimpinan in this suite has no linked pegawai row, so any :id lookup for
+  // "their own" profile can never resolve — mirrors the same structural
+  // pattern already relied on across dokumen/cuti.
+  const res = await request(app)
+    .patch(`/api/v1/pegawai/${pegawaiBProfileId}`)
+    .set("Authorization", `Bearer ${accounts.pimpinan.token}`)
+    .send({ alamat: "Should not be allowed" });
   assert.equal(res.status, 403);
 });
 
@@ -276,6 +305,47 @@ test("PATCH /pegawai/:id - non-existent pegawai returns 404", async () => {
     .patch("/api/v1/pegawai/00000000-0000-0000-0000-000000000000")
     .set("Authorization", `Bearer ${accounts.admin.token}`)
     .send({ namaLengkap: "Ghost" });
+  assert.equal(res.status, 404);
+});
+
+// --- DELETE /api/v1/pegawai/:id ---
+
+test("DELETE /pegawai/:id - pegawai and pimpinan cannot delete, not even their own profile (403)", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/pegawai/${pegawaiBProfileId}`)
+    .set("Authorization", `Bearer ${accounts.pegawaiB.token}`);
+  assert.equal(res.status, 403);
+});
+
+test("DELETE /pegawai/:id - non-existent id returns 404", async () => {
+  const res = await request(app)
+    .delete("/api/v1/pegawai/00000000-0000-0000-0000-000000000000")
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 404);
+});
+
+test("DELETE /pegawai/:id - admin can delete, then it's hidden from list and detail (404)", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/pegawai/${pegawaiBProfileId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data, null);
+
+  const detailRes = await request(app)
+    .get(`/api/v1/pegawai/${pegawaiBProfileId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(detailRes.status, 404);
+
+  const listRes = await request(app)
+    .get("/api/v1/pegawai?page=1&limit=100")
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.ok(!listRes.body.data.some((p) => p.id === pegawaiBProfileId));
+});
+
+test("DELETE /pegawai/:id - deleting an already-deleted pegawai returns 404", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/pegawai/${pegawaiBProfileId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
   assert.equal(res.status, 404);
 });
 

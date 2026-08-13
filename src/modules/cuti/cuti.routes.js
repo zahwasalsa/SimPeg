@@ -50,4 +50,9 @@ router.patch(
   controller.cancel,
 );
 
+// Soft delete; admin/hrd only, no self-service (pegawai already has "cancel"
+// for their own pending requests). Any status may be deleted, unlike cancel
+// which requires 'diajukan'.
+router.delete("/:id", authorize("admin", "hrd"), validation.idParamValidation, validate, controller.remove);
+
 module.exports = router;

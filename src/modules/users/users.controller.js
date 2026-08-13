@@ -53,4 +53,13 @@ const changeStatus = async (req, res, next) => {
   }
 };
 
-module.exports = { list, detail, changeRole, changeStatus };
+const remove = async (req, res, next) => {
+  try {
+    await usersService.deleteUser({ targetId: req.params.id, actorId: req.user.id });
+    responseHelper.success(res, { message: "User berhasil dihapus", data: null });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { list, detail, changeRole, changeStatus, remove };

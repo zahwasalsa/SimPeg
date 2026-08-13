@@ -20,13 +20,24 @@
             </div>
             <div class="mb-3">
               <label class="form-label" for="password">Password</label>
-              <input
-                type="password"
-                class="form-control"
-                id="password"
-                required
-                autocomplete="current-password"
-              />
+              <div class="input-group">
+                <input
+                  type="password"
+                  class="form-control"
+                  id="password"
+                  required
+                  autocomplete="current-password"
+                />
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  id="toggle-password"
+                  aria-label="Tampilkan password"
+                  aria-pressed="false"
+                >
+                  Tampilkan
+                </button>
+              </div>
             </div>
             <button type="submit" class="btn btn-primary w-100" id="login-submit">Masuk</button>
           </form>

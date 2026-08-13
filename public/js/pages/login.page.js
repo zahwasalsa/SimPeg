@@ -6,6 +6,16 @@ redirectIfAuthenticated();
 
 const form = document.getElementById("login-form");
 const submitBtn = document.getElementById("login-submit");
+const passwordInput = document.getElementById("password");
+const togglePasswordBtn = document.getElementById("toggle-password");
+
+togglePasswordBtn.addEventListener("click", () => {
+  const isHidden = passwordInput.type === "password";
+  passwordInput.type = isHidden ? "text" : "password";
+  togglePasswordBtn.textContent = isHidden ? "Sembunyikan" : "Tampilkan";
+  togglePasswordBtn.setAttribute("aria-label", isHidden ? "Sembunyikan password" : "Tampilkan password");
+  togglePasswordBtn.setAttribute("aria-pressed", String(isHidden));
+});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();

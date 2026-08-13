@@ -48,11 +48,20 @@ const create = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
-    const pegawai = await pegawaiService.updatePegawai(req.params.id, req.body);
+    const pegawai = await pegawaiService.updatePegawai(req.params.id, req.body, req.user);
     responseHelper.success(res, { message: "Pegawai berhasil diperbarui", data: pegawai });
   } catch (err) {
     next(err);
   }
 };
 
-module.exports = { list, detail, create, update };
+const remove = async (req, res, next) => {
+  try {
+    await pegawaiService.deletePegawai(req.params.id);
+    responseHelper.success(res, { message: "Pegawai berhasil dihapus", data: null });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { list, detail, create, update, remove };

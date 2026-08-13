@@ -13,8 +13,14 @@ import {
   listDokumenVersi,
   createDokumenVersi,
   getDokumenVersiUrl,
+  deleteDokumen,
 } from "../api/dokumen.js";
-import { listKategoriDokumen, createKategoriDokumen, updateKategoriDokumen } from "../api/kategoriDokumen.js";
+import {
+  listKategoriDokumen,
+  createKategoriDokumen,
+  updateKategoriDokumen,
+  deleteKategoriDokumen,
+} from "../api/kategoriDokumen.js";
 import { listPegawai } from "../api/pegawai.js";
 
 const STAFF_ROLES = ["admin", "hrd"];
@@ -120,7 +126,8 @@ const columns = () => {
       render: (row) => `
         <button class="btn btn-sm btn-outline-secondary me-1" data-action="detail" data-id="${row.id}" type="button">Detail</button>
         <button class="btn btn-sm btn-outline-primary me-1" data-action="preview" data-id="${row.id}" type="button">Preview</button>
-        <button class="btn btn-sm btn-outline-dark" data-action="download" data-id="${row.id}" type="button">Unduh</button>
+        <button class="btn btn-sm btn-outline-dark me-1" data-action="download" data-id="${row.id}" type="button">Unduh</button>
+        <button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-name="${escapeHtml(row.namaDokumen)}" type="button">Hapus</button>
       `,
     },
   );
@@ -173,6 +180,19 @@ const openSignedUrlInNewTab = (id, { download } = {}) =>
 
 const openVersiUrlInNewTab = (dokumenId, versionId, { download } = {}) =>
   openUrlInNewTab(() => getDokumenVersiUrl(dokumenId, versionId, { download }));
+
+const handleDelete = async (id, namaDokumen) => {
+  if (!window.confirm(`Hapus dokumen "${namaDokumen}"? Data akan disembunyikan dari daftar.`)) {
+    return;
+  }
+  try {
+    await deleteDokumen(id);
+    showToast("Dokumen berhasil dihapus", "success");
+    await load();
+  } catch (err) {
+    showToast(err.message || "Gagal menghapus dokumen", "danger");
+  }
+};
 
 let detailModalEl = null;
 let currentDetailDokumenId = null;
@@ -464,46 +484,55 @@ const buildKategoriModal = () => {
   document.getElementById("dokumen-kategori-add-btn").addEventListener("click", openKategoriCreateModal);
 
   document.getElementById("dokumen-kategori-list").addEventListener("click", (event) => {
-    const btn = event.target.closest("[data-action='edit']");
-    if (!btn) {
+    const editBtn = event.target.closest("[data-action='edit']");
+    if (editBtn) {
+      openKategoriEditModal(editBtn.dataset.id);
       return;
     }
-    openKategoriEditModal(btn.dataset.id);
+    const deleteBtn = event.target.closest("[data-action='delete']");
+    if (deleteBtn) {
+      handleKategoriDelete(deleteBtn.dataset.id, deleteBtn.dataset.name);
+    }
   });
 
   return el;
 };
 
+const kategoriColumns = () => [
+  { key: "namaKategori", label: "Nama Kategori" },
+  { key: "deskripsi", label: "Deskripsi", render: (row) => escapeHtml(row.deskripsi || "-") },
+  {
+    key: "actions",
+    label: "",
+    render: (row) => `
+      <button class="btn btn-sm btn-outline-primary me-1" data-action="edit" data-id="${row.id}" type="button">Edit</button>
+      <button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-name="${escapeHtml(row.namaKategori)}" type="button">Hapus</button>
+    `,
+  },
+];
+
+const handleKategoriDelete = async (id, namaKategori) => {
+  if (!window.confirm(`Hapus kategori "${namaKategori}"? Data akan disembunyikan dari daftar.`)) {
+    return;
+  }
+  try {
+    await deleteKategoriDokumen(id);
+    showToast("Kategori dokumen berhasil dihapus", "success");
+    await loadKategoriList();
+    await loadKategoriLookup();
+  } catch (err) {
+    showToast(err.message || "Gagal menghapus kategori dokumen", "danger");
+  }
+};
+
 const loadKategoriList = async () => {
   const listEl = document.getElementById("dokumen-kategori-list");
-  renderTable(listEl, {
-    columns: [
-      { key: "namaKategori", label: "Nama Kategori" },
-      { key: "deskripsi", label: "Deskripsi", render: (row) => escapeHtml(row.deskripsi || "-") },
-      {
-        key: "actions",
-        label: "",
-        render: (row) =>
-          `<button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${row.id}" type="button">Edit</button>`,
-      },
-    ],
-    rows: [],
-    loading: true,
-  });
+  renderTable(listEl, { columns: kategoriColumns(), rows: [], loading: true });
 
   try {
     const res = await listKategoriDokumen({ page: 1, limit: 100 });
     renderTable(listEl, {
-      columns: [
-        { key: "namaKategori", label: "Nama Kategori" },
-        { key: "deskripsi", label: "Deskripsi", render: (row) => escapeHtml(row.deskripsi || "-") },
-        {
-          key: "actions",
-          label: "",
-          render: (row) =>
-            `<button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${row.id}" type="button">Edit</button>`,
-        },
-      ],
+      columns: kategoriColumns(),
       rows: res.data,
       emptyMessage: "Belum ada kategori dokumen",
     });
@@ -606,6 +635,8 @@ const init = async () => {
       openSignedUrlInNewTab(id);
     } else if (action === "download") {
       openSignedUrlInNewTab(id, { download: true });
+    } else if (action === "delete") {
+      handleDelete(id, btn.dataset.name);
     }
   });
 

@@ -93,7 +93,8 @@ const getCurrentUser = async (userId) => {
   if (!profile) {
     throw new AppError("Pengguna tidak ditemukan", 404);
   }
-  return sanitizeUser(profile);
+  const pegawaiId = await authRepository.findPegawaiIdByUserId(userId);
+  return { ...sanitizeUser(profile), pegawaiId };
 };
 
 const refresh = async (refreshToken) => {

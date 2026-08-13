@@ -16,4 +16,8 @@ router.get("/:id", validation.idParamValidation, validate, controller.detail);
 router.post("/", authorize("admin", "hrd"), validation.createValidation, validate, controller.create);
 router.patch("/:id", authorize("admin", "hrd"), validation.updateValidation, validate, controller.update);
 
+// Soft delete; blocked with 409 while any pegawai still references this
+// jabatan (see jabatan.service.js).
+router.delete("/:id", authorize("admin", "hrd"), validation.idParamValidation, validate, controller.remove);
+
 module.exports = router;

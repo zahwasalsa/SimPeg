@@ -196,6 +196,20 @@ const updateDokumenActiveVersion = async (dokumenId, versionRow) => {
   return data;
 };
 
+const softDelete = async (id) => {
+  const { data, error } = await supabase
+    .from("dokumen")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select(SELECT_COLUMNS)
+    .single();
+  if (error) {
+    return null;
+  }
+  return data;
+};
+
 module.exports = {
   findAll,
   findById,
@@ -210,4 +224,5 @@ module.exports = {
   createVersion,
   deleteVersionById,
   updateDokumenActiveVersion,
+  softDelete,
 };

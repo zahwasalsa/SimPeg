@@ -101,7 +101,24 @@ const createPegawai = async (input) => {
   }
 };
 
-const updatePegawai = async (id, input) => {
+// Fields a pegawai/pimpinan may change on their own profile — personal
+// contact/biodata only. Organizational fields (nip, namaLengkap, divisiId,
+// jabatanId, statusKepegawaian) stay admin/hrd-only, since those affect
+// official records, not just the individual's own information.
+const SELF_EDITABLE_FIELDS = ["jenisKelamin", "tempatLahir", "tanggalLahir", "alamat", "noTelepon"];
+
+const updatePegawai = async (id, input, requester) => {
+  const isPrivileged = requester.role === "admin" || requester.role === "hrd";
+
+  if (!isPrivileged) {
+    const disallowed = Object.keys(input).filter(
+      (key) => input[key] !== undefined && !SELF_EDITABLE_FIELDS.includes(key),
+    );
+    if (disallowed.length > 0) {
+      throw new AppError(`Field berikut hanya dapat diubah oleh admin/HRD: ${disallowed.join(", ")}`, 403);
+    }
+  }
+
   const existing = await pegawaiRepository.findById(id);
   if (!existing) {
     throw new AppError("Pegawai tidak ditemukan", 404);
@@ -153,4 +170,17 @@ const updatePegawai = async (id, input) => {
   }
 };
 
-module.exports = { listPegawai, getPegawaiById, createPegawai, updatePegawai };
+const deletePegawai = async (id) => {
+  const existing = await pegawaiRepository.findById(id);
+  if (!existing) {
+    throw new AppError("Pegawai tidak ditemukan", 404);
+  }
+
+  const deleted = await pegawaiRepository.softDelete(id);
+  if (!deleted) {
+    throw new AppError("Pegawai tidak ditemukan", 404);
+  }
+  logger.info("Pegawai deleted", { pegawaiId: id });
+};
+
+module.exports = { listPegawai, getPegawaiById, createPegawai, updatePegawai, deletePegawai };

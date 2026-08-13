@@ -209,3 +209,56 @@ test("PATCH /users/:id/status - admin can deactivate a user, and that user is im
     .set("Authorization", `Bearer ${accounts.pegawai.token}`);
   assert.equal(meRes.status, 403);
 });
+
+// --- DELETE /api/v1/users/:id ---
+
+test("DELETE /users/:id - hrd/pimpinan cannot delete (403)", async () => {
+  for (const role of ["hrd", "pimpinan"]) {
+    const res = await request(app)
+      .delete(`/api/v1/users/${accounts.pegawai.id}`)
+      .set("Authorization", `Bearer ${accounts[role].token}`);
+    assert.equal(res.status, 403, `expected 403 for role ${role}`);
+  }
+});
+
+test("DELETE /users/:id - admin cannot delete their own account (400)", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/users/${accounts.admin.id}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 400);
+});
+
+test("DELETE /users/:id - non-existent id returns 404", async () => {
+  const res = await request(app)
+    .delete("/api/v1/users/00000000-0000-0000-0000-000000000000")
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 404);
+});
+
+test("DELETE /users/:id - admin can delete another user, then it's hidden from list and detail (404)", async () => {
+  // accounts.pegawai was deactivated by the previous test — deleting an
+  // already-deactivated user must still work (deleted_at, not is_active, is
+  // what softDelete/findById key off of).
+  const res = await request(app)
+    .delete(`/api/v1/users/${accounts.pegawai.id}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data, null);
+
+  const detailRes = await request(app)
+    .get(`/api/v1/users/${accounts.pegawai.id}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(detailRes.status, 404);
+
+  const listRes = await request(app)
+    .get("/api/v1/users?page=1&limit=100")
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.ok(!listRes.body.data.some((u) => u.id === accounts.pegawai.id));
+});
+
+test("DELETE /users/:id - deleting an already-deleted user returns 404", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/users/${accounts.pegawai.id}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 404);
+});

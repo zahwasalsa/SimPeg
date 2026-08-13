@@ -264,6 +264,22 @@ const getDokumenVersionDownloadUrl = async (dokumenId, versionId, { download } =
   return { url, expiresIn };
 };
 
+// Soft delete only — the underlying Storage file(s) and dokumen_version
+// history rows are left untouched (recoverable), consistent with every
+// other module's soft delete.
+const deleteDokumen = async (id) => {
+  const existing = await dokumenRepository.findById(id);
+  if (!existing) {
+    throw new AppError("Dokumen tidak ditemukan", 404);
+  }
+
+  const deleted = await dokumenRepository.softDelete(id);
+  if (!deleted) {
+    throw new AppError("Dokumen tidak ditemukan", 404);
+  }
+  logger.info("Dokumen deleted", { dokumenId: id });
+};
+
 module.exports = {
   listDokumen,
   getDokumenById,
@@ -272,4 +288,5 @@ module.exports = {
   getDokumenVersions,
   createDokumenVersion,
   getDokumenVersionDownloadUrl,
+  deleteDokumen,
 };

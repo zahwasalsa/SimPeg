@@ -22,6 +22,19 @@ router.get(
 
 router.post("/", authorize("admin", "hrd"), validation.createValidation, validate, controller.create);
 
-router.patch("/:id", authorize("admin", "hrd"), validation.updateValidation, validate, controller.update);
+// Self-service: pegawai/pimpinan may update their own profile (restricted to
+// personal fields — see pegawai.service.js), admin/hrd may update anyone
+// and any field.
+router.patch(
+  "/:id",
+  validation.updateValidation,
+  validate,
+  authorizePegawaiSelfOrRoles("admin", "hrd"),
+  controller.update,
+);
+
+// Admin/HRD only — no self-delete. Soft delete (sets deleted_at); the row
+// is hidden from every existing query but not physically removed.
+router.delete("/:id", authorize("admin", "hrd"), validation.idParamValidation, validate, controller.remove);
 
 module.exports = router;

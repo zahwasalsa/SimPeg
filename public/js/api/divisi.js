@@ -13,3 +13,5 @@ export const getDivisi = (id) => apiFetch(`/divisi/${id}`);
 export const createDivisi = (payload) => apiFetch("/divisi", { method: "POST", body: payload });
 
 export const updateDivisi = (id, payload) => apiFetch(`/divisi/${id}`, { method: "PATCH", body: payload });
+
+export const deleteDivisi = (id) => apiFetch(`/divisi/${id}`, { method: "DELETE" });

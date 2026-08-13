@@ -32,4 +32,7 @@ router.post(
 
 router.patch("/:id", authorize("admin", "hrd"), validation.updateValidation, validate, controller.update);
 
+// Soft delete; admin/hrd only, mirrors PATCH (record corrections stay staff-only).
+router.delete("/:id", authorize("admin", "hrd"), validation.idParamValidation, validate, controller.remove);
+
 module.exports = router;

@@ -22,3 +22,5 @@ export const getPegawai = (id) => apiFetch(`/pegawai/${id}`);
 export const createPegawai = (payload) => apiFetch("/pegawai", { method: "POST", body: payload });
 
 export const updatePegawai = (id, payload) => apiFetch(`/pegawai/${id}`, { method: "PATCH", body: payload });
+
+export const deletePegawai = (id) => apiFetch(`/pegawai/${id}`, { method: "DELETE" });

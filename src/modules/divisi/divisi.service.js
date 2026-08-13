@@ -80,4 +80,22 @@ const updateDivisi = async (id, { namaDivisi, deskripsi }) => {
   }
 };
 
-module.exports = { listDivisi, getDivisiById, createDivisi, updateDivisi };
+const deleteDivisi = async (id) => {
+  const existing = await divisiRepository.findById(id);
+  if (!existing) {
+    throw new AppError("Divisi tidak ditemukan", 404);
+  }
+
+  const isInUse = await divisiRepository.hasPegawai(id);
+  if (isInUse) {
+    throw new AppError("Divisi masih digunakan oleh pegawai, tidak dapat dihapus", 409);
+  }
+
+  const deleted = await divisiRepository.softDelete(id);
+  if (!deleted) {
+    throw new AppError("Divisi tidak ditemukan", 404);
+  }
+  logger.info("Divisi deleted", { divisiId: id });
+};
+
+module.exports = { listDivisi, getDivisiById, createDivisi, updateDivisi, deleteDivisi };

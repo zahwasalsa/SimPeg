@@ -354,27 +354,7 @@ dokumen_version
 
 ---
 
-# 13. KPI
-
-## kpi
-
-Target KPI.
-
----
-
-## kpi_detail
-
-Detail indikator.
-
----
-
-## kpi_progress
-
-Riwayat capaian.
-
----
-
-# 14. Roadmap Karier
+# 13. Roadmap Karier
 
 ## roadmap_karier
 
@@ -390,7 +370,7 @@ Status.
 
 ---
 
-# 15. Penelitian
+# 14. Penelitian
 
 ## penelitian
 
@@ -410,7 +390,7 @@ Hak Kekayaan Intelektual.
 
 ---
 
-# 16. Sertifikasi
+# 15. Sertifikasi
 
 ## sertifikasi
 
@@ -424,7 +404,7 @@ Reminder.
 
 ---
 
-# 17. Pelatihan
+# 16. Pelatihan
 
 ## pelatihan
 
@@ -438,7 +418,7 @@ Tanggal.
 
 ---
 
-# 18. Layanan Administrasi
+# 17. Layanan Administrasi
 
 ## layanan
 
@@ -474,7 +454,7 @@ Catatan.
 
 ---
 
-# 19. Notification
+# 18. Notification
 
 ## notifications
 
@@ -492,7 +472,7 @@ Expired Certification.
 
 ---
 
-# 20. Activity Logs
+# 19. Activity Logs
 
 ## activity_logs
 
@@ -514,7 +494,7 @@ Timestamp.
 
 ---
 
-# 21. Relationship
+# 20. Relationship
 
 users
 
@@ -555,16 +535,6 @@ pegawai
 N
 
 pelatihan
-
-pegawai
-
-1
-
-↓
-
-N
-
-kpi
 
 pegawai
 
@@ -638,7 +608,7 @@ permissions
 
 ---
 
-# 22. Indexing
+# 21. Indexing
 
 Seluruh kolom berikut wajib memiliki index.
 
@@ -658,7 +628,7 @@ status
 
 ---
 
-# 23. Constraints
+# 22. Constraints
 
 Email unik.
 
@@ -674,7 +644,7 @@ Approval tidak boleh tanpa pengajuan.
 
 ---
 
-# 24. Storage Rules
+# 23. Storage Rules
 
 File fisik berada pada
 
@@ -689,7 +659,7 @@ Database hanya menyimpan
 
 ---
 
-# 25. Migration Rules
+# 24. Migration Rules
 
 Seluruh perubahan database menggunakan migration SQL.
 
@@ -699,7 +669,7 @@ Tidak diperbolehkan mengubah migration lama.
 
 ---
 
-# 26. Seed Data
+# 25. Seed Data
 
 Seed minimal
 
@@ -721,7 +691,7 @@ Administrator
 
 ---
 
-# 27. Backup
+# 26. Backup
 
 Backup dilakukan otomatis.
 
@@ -729,7 +699,7 @@ Backup database terpisah dari Storage.
 
 ---
 
-# 28. Security
+# 27. Security
 
 Seluruh tabel menggunakan
 
@@ -741,7 +711,7 @@ Sensitive data hanya dapat diakses role tertentu.
 
 ---
 
-# 29. Future Tables
+# 28. Future Tables
 
 Penambahan tabel harus memenuhi:
 
@@ -753,7 +723,7 @@ Penambahan tabel harus memenuhi:
 
 ---
 
-# 30. Definition of Done
+# 29. Definition of Done
 
 Database dianggap selesai apabila:
 

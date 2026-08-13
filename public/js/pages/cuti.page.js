@@ -6,7 +6,15 @@ import { openFormModal } from "../components/modalForm.js";
 import { renderStatusBadge } from "../components/statusBadge.js";
 import { showToast } from "../components/toast.js";
 import { escapeHtml, formatDate, formatDateTime } from "../utils/format.js";
-import { listCuti, getCuti, createCuti, approveCuti, rejectCuti, cancelCuti } from "../api/cuti.js";
+import {
+  listCuti,
+  getCuti,
+  createCuti,
+  approveCuti,
+  rejectCuti,
+  cancelCuti,
+  deleteCuti,
+} from "../api/cuti.js";
 import { listPegawai } from "../api/pegawai.js";
 
 const STAFF_ROLES = ["admin", "hrd"];
@@ -104,7 +112,12 @@ const columns = () => {
         }
         if (row.status === "diajukan") {
           buttons.push(
-            `<button class="btn btn-sm btn-outline-dark" data-action="cancel" data-id="${row.id}" type="button">Batalkan</button>`,
+            `<button class="btn btn-sm btn-outline-dark me-1" data-action="cancel" data-id="${row.id}" type="button">Batalkan</button>`,
+          );
+        }
+        if (canManage()) {
+          buttons.push(
+            `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" type="button">Hapus</button>`,
           );
         }
         return buttons.join("");
@@ -217,6 +230,19 @@ const handleCancel = async (id) => {
   }
 };
 
+const handleDelete = async (id) => {
+  if (!window.confirm("Hapus data cuti ini? Data akan disembunyikan dari daftar.")) {
+    return;
+  }
+  try {
+    await deleteCuti(id);
+    showToast("Data cuti berhasil dihapus", "success");
+    await load();
+  } catch (err) {
+    showToast(err.message || "Gagal menghapus data cuti", "danger");
+  }
+};
+
 let detailModalEl = null;
 
 const buildDetailModal = () => {
@@ -311,6 +337,8 @@ const init = async () => {
       openRejectModal(id);
     } else if (action === "cancel") {
       handleCancel(id);
+    } else if (action === "delete") {
+      handleDelete(id);
     }
   });
 

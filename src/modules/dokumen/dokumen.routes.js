@@ -71,4 +71,14 @@ router.get(
   controller.downloadVersi,
 );
 
+// Soft delete; admin/hrd or the owning pegawai (mirrors detail/download
+// access). Storage file(s) and version history are left untouched.
+router.delete(
+  "/:id",
+  validation.idParamValidation,
+  validate,
+  dokumenAuthorize("admin", "hrd"),
+  controller.remove,
+);
+
 module.exports = router;

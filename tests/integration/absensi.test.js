@@ -341,6 +341,47 @@ test("PATCH /absensi/:id - non-existent id returns 404", async () => {
   assert.equal(res.status, 404);
 });
 
+// --- DELETE /api/v1/absensi/:id ---
+
+test("DELETE /absensi/:id - pegawai cannot delete, even their own record (403)", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/absensi/${absensiCheckinId}`)
+    .set("Authorization", `Bearer ${accounts.pegawaiA.token}`);
+  assert.equal(res.status, 403);
+});
+
+test("DELETE /absensi/:id - non-existent id returns 404", async () => {
+  const res = await request(app)
+    .delete("/api/v1/absensi/00000000-0000-0000-0000-000000000000")
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 404);
+});
+
+test("DELETE /absensi/:id - admin can delete, then it's hidden from list and detail (404)", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/absensi/${absensiHrdId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data, null);
+
+  const detailRes = await request(app)
+    .get(`/api/v1/absensi/${absensiHrdId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(detailRes.status, 404);
+
+  const listRes = await request(app)
+    .get("/api/v1/absensi?page=1&limit=100")
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.ok(!listRes.body.data.some((a) => a.id === absensiHrdId));
+});
+
+test("DELETE /absensi/:id - deleting an already-deleted record returns 404", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/absensi/${absensiHrdId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 404);
+});
+
 // --- Response sanitization ---
 
 test("Responses never leak password_hash, tokens, or secrets", async () => {

@@ -343,6 +343,47 @@ test("GET /dokumen/:id/download - the signed URL actually serves the uploaded by
   assert.ok(bytes.equals(PDF_BUFFER));
 });
 
+// --- DELETE /api/v1/dokumen/:id ---
+
+test("DELETE /dokumen/:id - non-owner pegawai cannot delete another pegawai's document (403)", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/dokumen/${dokumenAdminId}`)
+    .set("Authorization", `Bearer ${accounts.pegawaiB.token}`);
+  assert.equal(res.status, 403);
+});
+
+test("DELETE /dokumen/:id - non-existent id returns 404", async () => {
+  const res = await request(app)
+    .delete("/api/v1/dokumen/00000000-0000-0000-0000-000000000000")
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 404);
+});
+
+test("DELETE /dokumen/:id - owning pegawai can delete their own document (200)", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/dokumen/${dokumenPegawaiId}`)
+    .set("Authorization", `Bearer ${accounts.pegawaiB.token}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data, null);
+
+  const detailRes = await request(app)
+    .get(`/api/v1/dokumen/${dokumenPegawaiId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(detailRes.status, 404);
+
+  const listRes = await request(app)
+    .get("/api/v1/dokumen?page=1&limit=100")
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.ok(!listRes.body.data.some((d) => d.id === dokumenPegawaiId));
+});
+
+test("DELETE /dokumen/:id - deleting an already-deleted document returns 404", async () => {
+  const res = await request(app)
+    .delete(`/api/v1/dokumen/${dokumenPegawaiId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 404);
+});
+
 // --- Response sanitization ---
 
 test("Responses never leak password_hash, tokens, or secrets", async () => {

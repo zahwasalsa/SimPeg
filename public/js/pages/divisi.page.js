@@ -4,8 +4,8 @@ import { renderTable, renderErrorState } from "../components/dataTable.js";
 import { renderPagination } from "../components/pagination.js";
 import { openFormModal } from "../components/modalForm.js";
 import { showToast } from "../components/toast.js";
-import { formatDateTime } from "../utils/format.js";
-import { listDivisi, getDivisi, createDivisi, updateDivisi } from "../api/divisi.js";
+import { escapeHtml, formatDateTime } from "../utils/format.js";
+import { listDivisi, getDivisi, createDivisi, updateDivisi, deleteDivisi } from "../api/divisi.js";
 
 const MANAGE_ROLES = ["admin", "hrd"];
 
@@ -30,8 +30,10 @@ const columns = () => {
     base.push({
       key: "actions",
       label: "",
-      render: (row) =>
-        `<button class="btn btn-sm btn-outline-secondary" data-action="edit" data-id="${row.id}" type="button">Edit</button>`,
+      render: (row) => `
+        <button class="btn btn-sm btn-outline-secondary me-1" data-action="edit" data-id="${row.id}" type="button">Edit</button>
+        <button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-name="${escapeHtml(row.namaDivisi)}" type="button">Hapus</button>
+      `,
     });
   }
 
@@ -94,6 +96,19 @@ const openEditModal = async (id) => {
   }
 };
 
+const handleDelete = async (id, namaDivisi) => {
+  if (!window.confirm(`Hapus divisi "${namaDivisi}"? Data akan disembunyikan dari daftar.`)) {
+    return;
+  }
+  try {
+    await deleteDivisi(id);
+    showToast("Divisi berhasil dihapus", "success");
+    await load();
+  } catch (err) {
+    showToast(err.message || "Gagal menghapus divisi", "danger");
+  }
+};
+
 const init = async () => {
   currentUser = await requireAuth();
   if (!currentUser) {
@@ -108,11 +123,15 @@ const init = async () => {
   }
 
   tableEl.addEventListener("click", (event) => {
-    const btn = event.target.closest("[data-action='edit']");
-    if (!btn) {
+    const editBtn = event.target.closest("[data-action='edit']");
+    if (editBtn) {
+      openEditModal(editBtn.dataset.id);
       return;
     }
-    openEditModal(btn.dataset.id);
+    const deleteBtn = event.target.closest("[data-action='delete']");
+    if (deleteBtn) {
+      handleDelete(deleteBtn.dataset.id, deleteBtn.dataset.name);
+    }
   });
 
   let searchTimer;

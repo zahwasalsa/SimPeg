@@ -56,4 +56,13 @@ const update = async (req, res, next) => {
   }
 };
 
-module.exports = { list, detail, create, update };
+const remove = async (req, res, next) => {
+  try {
+    await kategoriDokumenService.deleteKategoriDokumen(req.params.id);
+    responseHelper.success(res, { message: "Kategori dokumen berhasil dihapus", data: null });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { list, detail, create, update, remove };

@@ -171,4 +171,17 @@ const cancelCuti = async (id) => {
   return sanitizeCuti(updated);
 };
 
-module.exports = { listCuti, getCutiById, createCuti, approveCuti, rejectCuti, cancelCuti };
+const deleteCuti = async (id) => {
+  const existing = await cutiRepository.findById(id);
+  if (!existing) {
+    throw new AppError("Data cuti tidak ditemukan", 404);
+  }
+
+  const deleted = await cutiRepository.softDelete(id);
+  if (!deleted) {
+    throw new AppError("Data cuti tidak ditemukan", 404);
+  }
+  logger.info("Cuti deleted", { cutiId: id });
+};
+
+module.exports = { listCuti, getCutiById, createCuti, approveCuti, rejectCuti, cancelCuti, deleteCuti };

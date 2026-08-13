@@ -132,6 +132,20 @@ const update = async (id, payload) => {
   return data;
 };
 
+const softDelete = async (id) => {
+  const { data, error } = await supabase
+    .from("pegawai")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select(SELECT_COLUMNS)
+    .single();
+  if (error) {
+    return null;
+  }
+  return data;
+};
+
 module.exports = {
   findAll,
   findById,
@@ -142,4 +156,5 @@ module.exports = {
   jabatanExists,
   create,
   update,
+  softDelete,
 };

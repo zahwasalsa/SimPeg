@@ -22,3 +22,5 @@ export const getAbsensi = (id) => apiFetch(`/absensi/${id}`);
 export const createAbsensi = (payload) => apiFetch("/absensi", { method: "POST", body: payload });
 
 export const updateAbsensi = (id, payload) => apiFetch(`/absensi/${id}`, { method: "PATCH", body: payload });
+
+export const deleteAbsensi = (id) => apiFetch(`/absensi/${id}`, { method: "DELETE" });
