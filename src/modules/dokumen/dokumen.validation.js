@@ -1,10 +1,14 @@
 const { param, body, query } = require("express-validator");
 
+const STATUS_VALUES = ["menunggu_persetujuan", "disetujui", "ditolak"];
+
 const listValidation = [
   query("page").optional().isInt({ min: 1 }).toInt(),
   query("limit").optional().isInt({ min: 1, max: 100 }).toInt(),
   query("pegawaiId").optional().isUUID().withMessage("pegawaiId tidak valid"),
   query("kategoriDokumenId").optional().isUUID().withMessage("kategoriDokumenId tidak valid"),
+  query("status").optional().isIn(STATUS_VALUES).withMessage("status tidak valid"),
+  query("akanKedaluwarsa").optional().isBoolean().withMessage("akanKedaluwarsa harus boolean").toBoolean(),
 ];
 
 const idParamValidation = [param("id").isUUID().withMessage("ID tidak valid")];
@@ -34,6 +38,28 @@ const createValidation = [
     .trim()
     .isLength({ min: 1, max: 200 })
     .withMessage("namaDokumen wajib diisi (maksimal 200 karakter)"),
+  body("tanggalKedaluwarsa")
+    .optional({ nullable: true, checkFalsy: true })
+    .isISO8601()
+    .withMessage("tanggalKedaluwarsa harus format tanggal valid (YYYY-MM-DD)"),
+];
+
+const approveValidation = [
+  param("id").isUUID().withMessage("ID tidak valid"),
+  body("catatanApproval")
+    .optional({ nullable: true })
+    .isString()
+    .withMessage("catatanApproval harus berupa teks"),
+];
+
+const rejectValidation = [
+  param("id").isUUID().withMessage("ID tidak valid"),
+  body("catatanApproval")
+    .exists({ checkFalsy: true })
+    .withMessage("catatanApproval wajib diisi saat menolak dokumen")
+    .bail()
+    .isString()
+    .withMessage("catatanApproval harus berupa teks"),
 ];
 
 const versiListValidation = [
@@ -52,4 +78,6 @@ module.exports = {
   createValidation,
   versiListValidation,
   versiIdParamValidation,
+  approveValidation,
+  rejectValidation,
 };

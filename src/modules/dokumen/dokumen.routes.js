@@ -71,6 +71,24 @@ router.get(
   controller.downloadVersi,
 );
 
+// FR-DOC-010: single-step approval, admin/hrd only, no self-service — mirrors
+// cuti's approve/reject exactly (same shape, same reasoning).
+router.patch(
+  "/:id/approve",
+  authorize("admin", "hrd"),
+  validation.approveValidation,
+  validate,
+  controller.approve,
+);
+
+router.patch(
+  "/:id/reject",
+  authorize("admin", "hrd"),
+  validation.rejectValidation,
+  validate,
+  controller.reject,
+);
+
 // Soft delete; admin/hrd or the owning pegawai (mirrors detail/download
 // access). Storage file(s) and version history are left untouched.
 router.delete(

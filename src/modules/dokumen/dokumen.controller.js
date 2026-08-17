@@ -5,13 +5,15 @@ const list = async (req, res, next) => {
   try {
     const page = req.query.page || 1;
     const limit = req.query.limit || 10;
-    const { pegawaiId, kategoriDokumenId } = req.query;
+    const { pegawaiId, kategoriDokumenId, status, akanKedaluwarsa } = req.query;
 
     const { dokumen, pagination } = await dokumenService.listDokumen({
       page,
       limit,
       pegawaiId,
       kategoriDokumenId,
+      status,
+      akanKedaluwarsa,
       requester: req.user,
     });
 
@@ -38,13 +40,14 @@ const detail = async (req, res, next) => {
 
 const create = async (req, res, next) => {
   try {
-    const { pegawaiId, kategoriDokumenId, namaDokumen } = req.body;
+    const { pegawaiId, kategoriDokumenId, namaDokumen, tanggalKedaluwarsa } = req.body;
 
     const dokumen = await dokumenService.createDokumen({
       requester: req.user,
       pegawaiId,
       kategoriDokumenId,
       namaDokumen,
+      tanggalKedaluwarsa,
       file: req.file,
     });
 
@@ -120,6 +123,32 @@ const downloadVersi = async (req, res, next) => {
   }
 };
 
+const approve = async (req, res, next) => {
+  try {
+    const dokumen = await dokumenService.approveDokumen({
+      id: req.params.id,
+      approverId: req.user.id,
+      catatanApproval: req.body.catatanApproval,
+    });
+    responseHelper.success(res, { message: "Dokumen disetujui", data: dokumen });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const reject = async (req, res, next) => {
+  try {
+    const dokumen = await dokumenService.rejectDokumen({
+      id: req.params.id,
+      approverId: req.user.id,
+      catatanApproval: req.body.catatanApproval,
+    });
+    responseHelper.success(res, { message: "Dokumen ditolak", data: dokumen });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const remove = async (req, res, next) => {
   try {
     await dokumenService.deleteDokumen(req.params.id);
@@ -129,4 +158,15 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { list, detail, create, download, listVersi, createVersi, downloadVersi, remove };
+module.exports = {
+  list,
+  detail,
+  create,
+  download,
+  listVersi,
+  createVersi,
+  downloadVersi,
+  approve,
+  reject,
+  remove,
+};

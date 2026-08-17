@@ -220,6 +220,12 @@ Status pegawai.
 
 Kategori dokumen.
 
+Kolom tambahan
+
+- wajib_approval — BOOLEAN, default FALSE. Menentukan apakah dokumen pada kategori ini
+  memerlukan persetujuan admin/HRD sebelum "berlaku" (FR-DOC-010). Diputuskan per-kategori,
+  bukan per-dokumen maupun per-role pengunggah — lihat `dokumen.status` di §12.
+
 ---
 
 ## jenis_sertifikasi
@@ -311,6 +317,17 @@ Kolom
 - ukuran_file
 - diunggah_oleh
 - versi_aktif — nomor versi yang sedang aktif, mengacu ke `dokumen_version.nomor_versi`
+- status — VARCHAR(30), `CHECK (status IN ('menunggu_persetujuan', 'disetujui', 'ditolak'))`,
+  nullable. NULL berarti `kategori_dokumen.wajib_approval` untuk dokumen ini FALSE, sehingga
+  tidak ada alur approval sama sekali (FR-DOC-010). Dokumen yang diunggah sebelum migrasi ini
+  ada tetap NULL walau kategorinya kemudian ditandai wajib approval — tidak ada approval
+  retroaktif. Diisi ulang menjadi `menunggu_persetujuan` setiap kali versi baru diunggah pada
+  dokumen yang kategorinya wajib approval (perlu ditinjau ulang).
+- disetujui_oleh — FK ke `users.id`, `ON DELETE SET NULL`
+- tanggal_persetujuan — TIMESTAMPTZ, diisi saat approve/reject
+- catatan_approval — TEXT, wajib diisi saat reject, opsional saat approve
+- tanggal_kedaluwarsa — DATE, nullable. Dipakai untuk reminder (FR-DOC-009); kebanyakan
+  kategori dokumen (mis. ijazah) tidak pernah kedaluwarsa sehingga kolom ini dikosongkan.
 - created_at
 - updated_at
 - deleted_at

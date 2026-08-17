@@ -18,9 +18,25 @@ const sanitizeDokumen = (row) => ({
   mimeType: row.mime_type,
   ukuranFile: row.ukuran_file,
   diunggahOleh: row.diunggah_oleh,
+  status: row.status,
+  disetujuiOleh: row.disetujui_oleh,
+  tanggalPersetujuan: row.tanggal_persetujuan,
+  catatanApproval: row.catatan_approval,
+  tanggalKedaluwarsa: row.tanggal_kedaluwarsa,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
+
+// FR-DOC-010: dokumen.status is only meaningful when its kategori is
+// wajib_approval (non-NULL). Approve/reject is only valid while pending.
+const ensurePendingApproval = (dokumen) => {
+  if (dokumen.status === null) {
+    throw new AppError("Dokumen ini tidak memerlukan approval (kategori tidak wajib approval)", 409);
+  }
+  if (dokumen.status !== "menunggu_persetujuan") {
+    throw new AppError(`Dokumen sudah diproses (status saat ini: ${dokumen.status})`, 409);
+  }
+};
 
 const sanitizeDokumenVersion = (row) => ({
   id: row.id,
@@ -43,7 +59,15 @@ const resolveOwnPegawaiId = async (userId) => {
   return pegawaiId;
 };
 
-const listDokumen = async ({ page, limit, pegawaiId, kategoriDokumenId, requester }) => {
+const listDokumen = async ({
+  page,
+  limit,
+  pegawaiId,
+  kategoriDokumenId,
+  status,
+  akanKedaluwarsa,
+  requester,
+}) => {
   let scopedPegawaiId = pegawaiId;
 
   if (requester.role !== "admin" && requester.role !== "hrd") {
@@ -59,6 +83,8 @@ const listDokumen = async ({ page, limit, pegawaiId, kategoriDokumenId, requeste
     limit,
     pegawaiId: scopedPegawaiId,
     kategoriDokumenId,
+    status,
+    akanKedaluwarsa,
   });
 
   return { dokumen: data.map(sanitizeDokumen), pagination: { page, limit, total } };
@@ -72,7 +98,14 @@ const getDokumenById = async (id) => {
   return sanitizeDokumen(dokumen);
 };
 
-const createDokumen = async ({ requester, pegawaiId, kategoriDokumenId, namaDokumen, file }) => {
+const createDokumen = async ({
+  requester,
+  pegawaiId,
+  kategoriDokumenId,
+  namaDokumen,
+  tanggalKedaluwarsa,
+  file,
+}) => {
   if (!file) {
     throw new AppError("Berkas wajib diunggah", 422);
   }
@@ -92,6 +125,11 @@ const createDokumen = async ({ requester, pegawaiId, kategoriDokumenId, namaDoku
   if (!isKategoriValid) {
     throw new AppError("Kategori dokumen tidak ditemukan", 404);
   }
+
+  // FR-DOC-010: approval is triggered per-kategori, not per-uploader-role —
+  // even an admin/hrd upload starts pending if the kategori requires it.
+  const wajibApproval = await dokumenRepository.findKategoriDokumenWajibApproval(kategoriDokumenId);
+  const initialStatus = wajibApproval ? "menunggu_persetujuan" : null;
 
   // Generated up front (not left to the DB default) so the Storage path can
   // be nested under it, keeping every version of a document — including
@@ -117,6 +155,8 @@ const createDokumen = async ({ requester, pegawaiId, kategoriDokumenId, namaDoku
     mime_type: file.mimetype,
     ukuran_file: file.size,
     diunggah_oleh: requester.id,
+    status: initialStatus,
+    tanggal_kedaluwarsa: tanggalKedaluwarsa || null,
   });
 
   try {
@@ -236,6 +276,27 @@ const createDokumenVersion = async ({ dokumenId, requester, file }) => {
     throw err;
   }
 
+  // FR-DOC-010 (design decision): a new version on a wajib_approval dokumen
+  // must be reviewed again — reset status and clear stale approval metadata
+  // from whatever review cycle applied to the previous version. Best-effort:
+  // the version upload itself has already succeeded and is not rolled back
+  // if only this secondary bookkeeping update fails.
+  if (dokumen.status !== null) {
+    try {
+      await dokumenRepository.update(dokumenId, {
+        status: "menunggu_persetujuan",
+        disetujui_oleh: null,
+        tanggal_persetujuan: null,
+        catatan_approval: null,
+      });
+    } catch (err) {
+      logger.error("Gagal mereset status approval setelah unggah versi baru", {
+        dokumenId,
+        error: err.message,
+      });
+    }
+  }
+
   logger.info("Dokumen version uploaded", {
     dokumenId,
     versionId: createdVersion.id,
@@ -264,6 +325,46 @@ const getDokumenVersionDownloadUrl = async (dokumenId, versionId, { download } =
   return { url, expiresIn };
 };
 
+// Single-step approval, admin/hrd only — mirrors cuti.service.js's
+// approveCuti exactly. Only valid while status is 'menunggu_persetujuan'
+// (never for a dokumen whose kategori isn't wajib_approval, or one already
+// decided).
+const approveDokumen = async ({ id, approverId, catatanApproval }) => {
+  const existing = await dokumenRepository.findById(id);
+  if (!existing) {
+    throw new AppError("Dokumen tidak ditemukan", 404);
+  }
+  ensurePendingApproval(existing);
+
+  const updated = await dokumenRepository.update(id, {
+    status: "disetujui",
+    disetujui_oleh: approverId,
+    tanggal_persetujuan: new Date().toISOString(),
+    catatan_approval: catatanApproval || null,
+  });
+  logger.info("Dokumen approved", { dokumenId: id, approverId });
+  return sanitizeDokumen(updated);
+};
+
+// Mirrors cuti.service.js's rejectCuti — catatanApproval is required here
+// (enforced by dokumen.validation.js), unlike approve where it's optional.
+const rejectDokumen = async ({ id, approverId, catatanApproval }) => {
+  const existing = await dokumenRepository.findById(id);
+  if (!existing) {
+    throw new AppError("Dokumen tidak ditemukan", 404);
+  }
+  ensurePendingApproval(existing);
+
+  const updated = await dokumenRepository.update(id, {
+    status: "ditolak",
+    disetujui_oleh: approverId,
+    tanggal_persetujuan: new Date().toISOString(),
+    catatan_approval: catatanApproval,
+  });
+  logger.info("Dokumen rejected", { dokumenId: id, approverId });
+  return sanitizeDokumen(updated);
+};
+
 // Soft delete only — the underlying Storage file(s) and dokumen_version
 // history rows are left untouched (recoverable), consistent with every
 // other module's soft delete.
@@ -288,5 +389,7 @@ module.exports = {
   getDokumenVersions,
   createDokumenVersion,
   getDokumenVersionDownloadUrl,
+  approveDokumen,
+  rejectDokumen,
   deleteDokumen,
 };

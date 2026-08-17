@@ -17,8 +17,10 @@ const accounts = {
 let pegawaiAId;
 let pegawaiBId;
 let kategoriId;
+let kategoriApprovalId;
 let dokumenAdminId;
 let dokumenPegawaiId;
+let dokumenApprovalId;
 
 const PDF_BUFFER = Buffer.from("%PDF-1.4\nQA integration test content\n");
 const attachPdf = (req, filename = "qa-test.pdf") =>
@@ -85,6 +87,16 @@ before(async () => {
     throw error;
   }
   kategoriId = kategori.id;
+
+  const { data: kategoriApproval, error: kategoriApprovalErr } = await supabaseAdmin
+    .from("kategori_dokumen")
+    .insert({ nama_kategori: `QA Dokumen Kategori Approval ${runId}`, wajib_approval: true })
+    .select("id")
+    .single();
+  if (kategoriApprovalErr) {
+    throw kategoriApprovalErr;
+  }
+  kategoriApprovalId = kategoriApproval.id;
 });
 
 after(async () => {
@@ -99,7 +111,7 @@ after(async () => {
 
   await supabaseAdmin.from("dokumen").delete().in("pegawai_id", [pegawaiAId, pegawaiBId]);
   await supabaseAdmin.from("pegawai").delete().in("id", [pegawaiAId, pegawaiBId]);
-  await supabaseAdmin.from("kategori_dokumen").delete().eq("id", kategoriId);
+  await supabaseAdmin.from("kategori_dokumen").delete().in("id", [kategoriId, kategoriApprovalId]);
   await Promise.all(Object.values(accounts).map((acc) => supabaseAdmin.auth.admin.deleteUser(acc.id)));
 });
 
@@ -341,6 +353,126 @@ test("GET /dokumen/:id/download - the signed URL actually serves the uploaded by
   assert.equal(fileRes.status, 200);
   const bytes = Buffer.from(await fileRes.arrayBuffer());
   assert.ok(bytes.equals(PDF_BUFFER));
+});
+
+// --- FR-DOC-010: Approval (per-kategori wajib_approval) ---
+
+test("POST /dokumen - upload to a non-wajib_approval kategori has status null", async () => {
+  const res = await request(app)
+    .get(`/api/v1/dokumen/${dokumenAdminId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.status, null);
+});
+
+test("POST /dokumen - upload to a wajib_approval kategori starts menunggu_persetujuan", async () => {
+  const res = await attachPdf(
+    request(app)
+      .post("/api/v1/dokumen")
+      .set("Authorization", `Bearer ${accounts.admin.token}`)
+      .field("pegawaiId", pegawaiAId)
+      .field("kategoriDokumenId", kategoriApprovalId)
+      .field("namaDokumen", "SK Pengangkatan QA")
+      .field("tanggalKedaluwarsa", "2020-01-01"),
+  );
+  assert.equal(res.status, 201);
+  assert.equal(res.body.data.status, "menunggu_persetujuan");
+  assert.equal(res.body.data.tanggalKedaluwarsa, "2020-01-01");
+  dokumenApprovalId = res.body.data.id;
+});
+
+test("PATCH /dokumen/:id/approve - pegawai and pimpinan cannot approve (403)", async () => {
+  for (const role of ["pegawaiA", "pimpinan"]) {
+    const res = await request(app)
+      .patch(`/api/v1/dokumen/${dokumenApprovalId}/approve`)
+      .set("Authorization", `Bearer ${accounts[role].token}`)
+      .send({});
+    assert.equal(res.status, 403, `expected 403 for role ${role}`);
+  }
+});
+
+test("PATCH /dokumen/:id/approve - a dokumen whose kategori isn't wajib_approval is rejected (409)", async () => {
+  const res = await request(app)
+    .patch(`/api/v1/dokumen/${dokumenAdminId}/approve`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`)
+    .send({});
+  assert.equal(res.status, 409);
+});
+
+test("PATCH /dokumen/:id/reject - rejects without catatanApproval (422)", async () => {
+  const res = await request(app)
+    .patch(`/api/v1/dokumen/${dokumenApprovalId}/reject`)
+    .set("Authorization", `Bearer ${accounts.hrd.token}`)
+    .send({});
+  assert.equal(res.status, 422);
+});
+
+test("PATCH /dokumen/:id/approve - admin can approve (200)", async () => {
+  const res = await request(app)
+    .patch(`/api/v1/dokumen/${dokumenApprovalId}/approve`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`)
+    .send({ catatanApproval: "Lengkap dan sesuai" });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.status, "disetujui");
+  assert.equal(res.body.data.disetujuiOleh, accounts.admin.id);
+  assert.ok(res.body.data.tanggalPersetujuan);
+});
+
+test("PATCH /dokumen/:id/approve - approving an already-processed dokumen is rejected (409)", async () => {
+  const res = await request(app)
+    .patch(`/api/v1/dokumen/${dokumenApprovalId}/approve`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`)
+    .send({});
+  assert.equal(res.status, 409);
+});
+
+test("POST /dokumen/:id/versi - uploading a new version resets an approved dokumen back to menunggu_persetujuan", async () => {
+  const res = await attachPdf(
+    request(app)
+      .post(`/api/v1/dokumen/${dokumenApprovalId}/versi`)
+      .set("Authorization", `Bearer ${accounts.admin.token}`),
+    "qa-test-v2.pdf",
+  );
+  assert.equal(res.status, 201);
+
+  const detailRes = await request(app)
+    .get(`/api/v1/dokumen/${dokumenApprovalId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(detailRes.body.data.status, "menunggu_persetujuan");
+  assert.equal(detailRes.body.data.disetujuiOleh, null);
+  assert.equal(detailRes.body.data.catatanApproval, null);
+});
+
+test("PATCH /dokumen/:id/reject - hrd can reject with catatanApproval (200)", async () => {
+  const res = await request(app)
+    .patch(`/api/v1/dokumen/${dokumenApprovalId}/reject`)
+    .set("Authorization", `Bearer ${accounts.hrd.token}`)
+    .send({ catatanApproval: "Berkas kurang jelas, mohon unggah ulang" });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.status, "ditolak");
+  assert.equal(res.body.data.catatanApproval, "Berkas kurang jelas, mohon unggah ulang");
+});
+
+test("GET /dokumen - status filter returns only matching rows", async () => {
+  const res = await request(app)
+    .get("/api/v1/dokumen?status=ditolak")
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 200);
+  assert.ok(res.body.data.some((d) => d.id === dokumenApprovalId));
+  assert.ok(res.body.data.every((d) => d.status === "ditolak"));
+});
+
+// --- FR-DOC-009: Reminder (akanKedaluwarsa filter) ---
+
+test("GET /dokumen - akanKedaluwarsa filter includes expired/expiring documents only", async () => {
+  const res = await request(app)
+    .get("/api/v1/dokumen?akanKedaluwarsa=true")
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 200);
+  // dokumenApprovalId was uploaded with tanggalKedaluwarsa 2020-01-01 (long expired).
+  assert.ok(res.body.data.some((d) => d.id === dokumenApprovalId));
+  // dokumenAdminId has no tanggalKedaluwarsa at all — must never match.
+  assert.ok(!res.body.data.some((d) => d.id === dokumenAdminId));
 });
 
 // --- DELETE /api/v1/dokumen/:id ---

@@ -1,6 +1,6 @@
 const supabase = require("../../database/supabaseClient");
 
-const SELECT_COLUMNS = "id, nama_kategori, deskripsi, created_at, updated_at";
+const SELECT_COLUMNS = "id, nama_kategori, deskripsi, wajib_approval, created_at, updated_at";
 
 // PostgREST filter values are structural for some operators; strip
 // characters with special meaning so a search term can't affect the query

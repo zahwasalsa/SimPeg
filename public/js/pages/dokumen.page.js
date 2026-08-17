@@ -3,8 +3,9 @@ import { renderNavbar } from "../components/navbar.js";
 import { renderTable, renderErrorState } from "../components/dataTable.js";
 import { renderPagination } from "../components/pagination.js";
 import { openFormModal } from "../components/modalForm.js";
+import { renderStatusBadge } from "../components/statusBadge.js";
 import { showToast } from "../components/toast.js";
-import { escapeHtml, formatDateTime } from "../utils/format.js";
+import { escapeHtml, formatDate, formatDateTime } from "../utils/format.js";
 import {
   listDokumen,
   getDokumen,
@@ -13,6 +14,8 @@ import {
   listDokumenVersi,
   createDokumenVersi,
   getDokumenVersiUrl,
+  approveDokumen,
+  rejectDokumen,
   deleteDokumen,
 } from "../api/dokumen.js";
 import {
@@ -44,6 +47,14 @@ const MIME_LABELS = {
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
 };
 
+// dokumen.status is only set when its kategori is wajib_approval — NULL
+// (rendered "-") means no approval workflow applies to this document at all.
+const STATUS_VARIANTS = {
+  menunggu_persetujuan: { color: "warning", label: "Menunggu Persetujuan" },
+  disetujui: { color: "success", label: "Disetujui" },
+  ditolak: { color: "danger", label: "Ditolak" },
+};
+
 const tableEl = document.getElementById("dokumen-table");
 const paginationEl = document.getElementById("dokumen-pagination");
 const addBtn = document.getElementById("dokumen-add-btn");
@@ -51,8 +62,15 @@ const kategoriBtn = document.getElementById("dokumen-kategori-btn");
 const filterPegawaiWrap = document.getElementById("dokumen-filter-pegawai-wrap");
 const filterPegawaiEl = document.getElementById("dokumen-filter-pegawai");
 const filterKategoriEl = document.getElementById("dokumen-filter-kategori");
+const filterStatusEl = document.getElementById("dokumen-filter-status");
 
-const state = { page: 1, limit: 10, pegawaiId: undefined, kategoriDokumenId: undefined };
+const state = {
+  page: 1,
+  limit: 10,
+  pegawaiId: undefined,
+  kategoriDokumenId: undefined,
+  status: undefined,
+};
 let currentUser = null;
 let pegawaiMap = {};
 let kategoriMap = {};
@@ -114,6 +132,11 @@ const columns = () => {
       render: (row) => escapeHtml(kategoriMap[row.kategoriDokumenId] || "-"),
     },
     {
+      key: "status",
+      label: "Status Approval",
+      render: (row) => (row.status ? renderStatusBadge(row.status, STATUS_VARIANTS) : "-"),
+    },
+    {
       key: "mimeType",
       label: "Tipe",
       render: (row) => escapeHtml(MIME_LABELS[row.mimeType] || row.mimeType),
@@ -123,12 +146,23 @@ const columns = () => {
     {
       key: "actions",
       label: "",
-      render: (row) => `
-        <button class="btn btn-sm btn-outline-secondary me-1" data-action="detail" data-id="${row.id}" type="button">Detail</button>
-        <button class="btn btn-sm btn-outline-primary me-1" data-action="preview" data-id="${row.id}" type="button">Preview</button>
-        <button class="btn btn-sm btn-outline-dark me-1" data-action="download" data-id="${row.id}" type="button">Unduh</button>
-        <button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-name="${escapeHtml(row.namaDokumen)}" type="button">Hapus</button>
-      `,
+      render: (row) => {
+        const buttons = [
+          `<button class="btn btn-sm btn-outline-secondary me-1" data-action="detail" data-id="${row.id}" type="button">Detail</button>`,
+          `<button class="btn btn-sm btn-outline-primary me-1" data-action="preview" data-id="${row.id}" type="button">Preview</button>`,
+          `<button class="btn btn-sm btn-outline-dark me-1" data-action="download" data-id="${row.id}" type="button">Unduh</button>`,
+        ];
+        if (canManage() && row.status === "menunggu_persetujuan") {
+          buttons.push(
+            `<button class="btn btn-sm btn-outline-success me-1" data-action="approve" data-id="${row.id}" type="button">Setujui</button>`,
+            `<button class="btn btn-sm btn-outline-danger me-1" data-action="reject" data-id="${row.id}" type="button">Tolak</button>`,
+          );
+        }
+        buttons.push(
+          `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-name="${escapeHtml(row.namaDokumen)}" type="button">Hapus</button>`,
+        );
+        return buttons.join("");
+      },
     },
   );
 
@@ -180,6 +214,36 @@ const openSignedUrlInNewTab = (id, { download } = {}) =>
 
 const openVersiUrlInNewTab = (dokumenId, versionId, { download } = {}) =>
   openUrlInNewTab(() => getDokumenVersiUrl(dokumenId, versionId, { download }));
+
+const openApproveModal = (id) => {
+  openFormModal({
+    title: "Setujui Dokumen",
+    fields: [{ name: "catatanApproval", label: "Catatan (opsional)", type: "textarea" }],
+    submitLabel: "Setujui",
+    onSubmit: async (values) => {
+      const payload = { ...values };
+      if (payload.catatanApproval === "") {
+        delete payload.catatanApproval;
+      }
+      await approveDokumen(id, payload);
+      showToast("Dokumen disetujui", "success");
+      await load();
+    },
+  });
+};
+
+const openRejectModal = (id) => {
+  openFormModal({
+    title: "Tolak Dokumen",
+    fields: [{ name: "catatanApproval", label: "Catatan Penolakan", type: "textarea", required: true }],
+    submitLabel: "Tolak",
+    onSubmit: async (values) => {
+      await rejectDokumen(id, values);
+      showToast("Dokumen ditolak", "success");
+      await load();
+    },
+  });
+};
 
 const handleDelete = async (id, namaDokumen) => {
   if (!window.confirm(`Hapus dokumen "${namaDokumen}"? Data akan disembunyikan dari daftar.`)) {
@@ -314,6 +378,10 @@ const refreshDetailMetadata = async (id) => {
     detailRow("Nama Berkas Asli (Versi Aktif)", escapeHtml(d.namaFileAsli)),
     detailRow("Tipe Berkas", escapeHtml(MIME_LABELS[d.mimeType] || d.mimeType)),
     detailRow("Ukuran Berkas", formatFileSize(d.ukuranFile)),
+    detailRow("Status Approval", d.status ? renderStatusBadge(d.status, STATUS_VARIANTS) : "-"),
+    detailRow("Catatan Approval", escapeHtml(d.catatanApproval || "-")),
+    detailRow("Tanggal Persetujuan", d.tanggalPersetujuan ? formatDateTime(d.tanggalPersetujuan) : "-"),
+    detailRow("Tanggal Kedaluwarsa", d.tanggalKedaluwarsa ? formatDate(d.tanggalKedaluwarsa) : "-"),
     detailRow("Diunggah Pada", formatDateTime(d.createdAt)),
     detailRow("Terakhir Diubah", formatDateTime(d.updatedAt)),
   );
@@ -399,6 +467,12 @@ const uploadFormFields = () => {
     },
     { name: "namaDokumen", label: "Nama Dokumen", required: true },
     {
+      name: "tanggalKedaluwarsa",
+      label: "Tanggal Kedaluwarsa",
+      type: "date",
+      helpText: "Opsional — isi hanya jika dokumen ini punya masa berlaku (mis. sertifikat).",
+    },
+    {
       name: "file",
       label: "Berkas",
       type: "file",
@@ -441,6 +515,9 @@ const openUploadModal = () => {
       }
       formData.append("kategoriDokumenId", values.kategoriDokumenId);
       formData.append("namaDokumen", values.namaDokumen);
+      if (values.tanggalKedaluwarsa) {
+        formData.append("tanggalKedaluwarsa", values.tanggalKedaluwarsa);
+      }
       formData.append("file", file);
 
       await createDokumen(formData);
@@ -502,6 +579,11 @@ const kategoriColumns = () => [
   { key: "namaKategori", label: "Nama Kategori" },
   { key: "deskripsi", label: "Deskripsi", render: (row) => escapeHtml(row.deskripsi || "-") },
   {
+    key: "wajibApproval",
+    label: "Wajib Approval",
+    render: (row) => (row.wajibApproval ? '<span class="badge text-bg-warning">Ya</span>' : "-"),
+  },
+  {
     key: "actions",
     label: "",
     render: (row) => `
@@ -547,15 +629,26 @@ const openKategoriManageModal = async () => {
   await loadKategoriList();
 };
 
+// Checkbox fields submit as the string "true" when checked, or are simply
+// absent (undefined) from FormData when unchecked — never "false" — so the
+// boolean has to be derived explicitly rather than passed through as-is.
+const kategoriWajibApprovalField = (value) => ({
+  name: "wajibApproval",
+  label: "Wajib Approval — dokumen di kategori ini perlu disetujui admin/HRD sebelum berlaku",
+  type: "checkbox",
+  value,
+});
+
 const openKategoriCreateModal = () => {
   openFormModal({
     title: "Tambah Kategori Dokumen",
     fields: [
       { name: "namaKategori", label: "Nama Kategori", required: true },
       { name: "deskripsi", label: "Deskripsi", type: "textarea" },
+      kategoriWajibApprovalField(false),
     ],
     onSubmit: async (values) => {
-      const payload = { ...values };
+      const payload = { ...values, wajibApproval: values.wajibApproval === "true" };
       if (payload.deskripsi === "") {
         delete payload.deskripsi;
       }
@@ -576,9 +669,10 @@ const openKategoriEditModal = async (id) => {
       fields: [
         { name: "namaKategori", label: "Nama Kategori", required: true, value: kategori?.namaKategori },
         { name: "deskripsi", label: "Deskripsi", type: "textarea", value: kategori?.deskripsi },
+        kategoriWajibApprovalField(kategori?.wajibApproval),
       ],
       onSubmit: async (values) => {
-        const payload = { ...values };
+        const payload = { ...values, wajibApproval: values.wajibApproval === "true" };
         if (payload.deskripsi === "") {
           delete payload.deskripsi;
         }
@@ -637,6 +731,10 @@ const init = async () => {
       openSignedUrlInNewTab(id, { download: true });
     } else if (action === "delete") {
       handleDelete(id, btn.dataset.name);
+    } else if (action === "approve") {
+      openApproveModal(id);
+    } else if (action === "reject") {
+      openRejectModal(id);
     }
   });
 
@@ -648,6 +746,12 @@ const init = async () => {
 
   filterKategoriEl.addEventListener("change", () => {
     state.kategoriDokumenId = filterKategoriEl.value || undefined;
+    state.page = 1;
+    load();
+  });
+
+  filterStatusEl.addEventListener("change", () => {
+    state.status = filterStatusEl.value || undefined;
     state.page = 1;
     load();
   });

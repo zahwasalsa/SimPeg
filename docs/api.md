@@ -838,9 +838,11 @@ Diimplementasikan pada Phase 5 (Document Management), Stage 4A + Stage 4B. Path 
 `Authorization: Bearer <accessToken>`. Role tidak pernah dicek di Controller — gate akses ada di
 `authMiddleware`/`authorize`/`dokumen.authorize.js`, scope data diputuskan di Service.
 
-`:id` pada endpoint di bawah adalah `dokumen.id`. Tidak ada endpoint `PATCH` untuk `dokumen` maupun
-`PATCH`/`DELETE` untuk `dokumen_version` — riwayat versi bersifat immutable, tidak bisa diedit/dihapus
-lewat API. `DELETE /dokumen/{id}` **ada** (soft delete pada baris `dokumen` saja) — lihat di bawah.
+`:id` pada endpoint di bawah adalah `dokumen.id`. Tidak ada endpoint `PATCH`/`DELETE` untuk
+`dokumen_version` — riwayat versi bersifat immutable, tidak bisa diedit/dihapus lewat API.
+`DELETE /dokumen/{id}` **ada** (soft delete pada baris `dokumen` saja) — lihat di bawah. `dokumen` tidak
+punya `PATCH` generik, tapi punya dua endpoint state-transition sempit — `PATCH /dokumen/{id}/approve`
+dan `PATCH /dokumen/{id}/reject` (FR-DOC-010) — pola yang identik dengan `approve`/`reject` pada Cuti.
 
 Kolom `dokumen.namaFileAsli`/`bucket`/`mimeType`/`ukuranFile` selalu mencerminkan **versi aktif**
 (diperbarui otomatis setiap kali versi baru diunggah) — `GET /dokumen`, `GET /dokumen/{id}`, dan
@@ -850,12 +852,26 @@ Kolom `dokumen.namaFileAsli`/`bucket`/`mimeType`/`ukuranFile` selalu mencerminka
 tipe yang diizinkan `application/pdf`, `image/jpeg`, `image/png`, `application/msword`,
 `application/vnd.openxmlformats-officedocument.wordprocessingml.document`; ukuran maksimum 10MB.
 
+**Approval per kategori (FR-DOC-010).** Apakah sebuah dokumen memerlukan approval ditentukan oleh
+`kategoriDokumen.wajibApproval`, bukan oleh siapa yang mengunggah. Dokumen baru pada kategori
+`wajibApproval=true` otomatis berstatus `menunggu_persetujuan`; pada kategori lain, `status` tetap
+`null` (tidak ada alur approval sama sekali). Mengunggah versi baru (`POST /dokumen/{id}/versi`) pada
+dokumen yang kategorinya wajib approval **mereset** `status` kembali ke `menunggu_persetujuan` dan
+menghapus `disetujuiOleh`/`tanggalPersetujuan`/`catatanApproval` sebelumnya — versi baru perlu ditinjau
+ulang. Dokumen yang sudah ada sebelum kategorinya ditandai wajib approval **tidak** diminta approval
+retroaktif (tetap `status: null`).
+
+**Reminder kedaluwarsa (FR-DOC-009).** `dokumen.tanggalKedaluwarsa` opsional saat upload. Query param
+`akanKedaluwarsa=true` pada `GET /dokumen` menyaring dokumen yang tanggal kedaluwarsanya sudah lewat
+atau akan lewat dalam 30 hari ke depan — dipakai Dashboard untuk kartu/reminder, murni in-app (tidak
+ada pengiriman email/notifikasi).
+
 ---
 
 ## GET /dokumen
 
 Query params: `page`, `limit`, `pegawaiId` (UUID, hanya efektif untuk admin/hrd), `kategoriDokumenId`
-(UUID)
+(UUID), `status` (`menunggu_persetujuan`\|`disetujui`\|`ditolak`), `akanKedaluwarsa` (`true`/`false`)
 
 - **Admin/HRD**: melihat seluruh data, `pegawaiId` sebagai filter opsional.
 - **Pegawai/Pimpinan**: `pegawaiId` dari query **diabaikan** — hasil selalu otomatis di-scope ke pegawai
@@ -879,7 +895,11 @@ Response 200
     "id": "uuid", "pegawaiId": "uuid", "kategoriDokumenId": "uuid",
     "namaDokumen": "Ijazah S1", "namaFileAsli": "ijazah.pdf",
     "bucket": "documents", "mimeType": "application/pdf", "ukuranFile": 204800,
-    "diunggahOleh": "uuid", "createdAt": "...", "updatedAt": "..."
+    "diunggahOleh": "uuid",
+    "status": "menunggu_persetujuan atau disetujui/ditolak/null",
+    "disetujuiOleh": "uuid atau null", "tanggalPersetujuan": "... atau null",
+    "catatanApproval": "... atau null", "tanggalKedaluwarsa": "YYYY-MM-DD atau null",
+    "createdAt": "...", "updatedAt": "..."
   }
 }
 ```
@@ -912,15 +932,49 @@ Perilaku berbeda tergantung role — endpoint yang sama, sumber identitas berbed
 - **Pimpinan**: selalu `403`.
 
 `multipart/form-data`: `pegawaiId` (UUID, kondisional), `kategoriDokumenId` (UUID, wajib),
-`namaDokumen` (string 1–200, wajib), `file` (wajib).
+`namaDokumen` (string 1–200, wajib), `tanggalKedaluwarsa` (`YYYY-MM-DD`, opsional, FR-DOC-009),
+`file` (wajib).
 
 Response `201`. Dokumen baru otomatis membuat `dokumen_version` nomor 1 (`versiAktif=1`) — jika
 langkah ini gagal, dokumen tetap berhasil dibuat (di-log, tidak menggagalkan permintaan) karena tidak
-ada transaction lintas tabel di implementasi saat ini.
+ada transaction lintas tabel di implementasi saat ini. `status` awal ditentukan otomatis dari
+`kategoriDokumen.wajibApproval` (lihat catatan approval di atas) — tidak bisa dikirim manual di body.
 
 Error: `401`, `403` (pimpinan, atau `pegawaiId` tanpa role admin/hrd), `404` (`pegawaiId`/
 `kategoriDokumenId` tidak ditemukan), `422` (field tidak valid, tipe berkas tidak didukung, berkas
-kosong, atau `pegawaiId` dikirim oleh pegawai), `422` ukuran berkas >10MB
+kosong, `tanggalKedaluwarsa` bukan tanggal valid, atau `pegawaiId` dikirim oleh pegawai), `422` ukuran
+berkas >10MB
+
+---
+
+## PATCH /dokumen/{id}/approve
+
+*(FR-DOC-010)* **Admin/HRD only**, tidak ada self-service. Hanya valid jika `status` saat ini
+`menunggu_persetujuan` — `409` jika dokumen tidak memerlukan approval sama sekali (`status: null`)
+maupun jika sudah pernah diputuskan sebelumnya.
+
+Set `status=disetujui`, `disetujuiOleh=<user yang approve>`, `tanggalPersetujuan=<waktu approve>`.
+
+```json
+{ "catatanApproval": "Lengkap dan sesuai (opsional)" }
+```
+
+Response 200 — objek dokumen. Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `409` status
+bukan `menunggu_persetujuan` (termasuk `null`), `422` id bukan UUID
+
+---
+
+## PATCH /dokumen/{id}/reject
+
+*(FR-DOC-010)* **Admin/HRD only.** `catatanApproval` **wajib diisi** (alasan penolakan) — sama seperti
+`PATCH /cuti/{id}/reject`.
+
+```json
+{ "catatanApproval": "Berkas kurang jelas, mohon unggah ulang" }
+```
+
+Response 200, `status=ditolak`. Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `409` status
+bukan `menunggu_persetujuan`, `422` `catatanApproval` tidak diisi / id bukan UUID
 
 ---
 
@@ -1026,26 +1080,29 @@ Response 200 — format pagination standar.
 
 ## GET /kategori-dokumen/{id}
 
-Response 200: `{ "id", "namaKategori", "deskripsi", "createdAt", "updatedAt" }`. Error: `404`, `422` id
-bukan UUID.
+Response 200: `{ "id", "namaKategori", "deskripsi", "wajibApproval", "createdAt", "updatedAt" }`. Error:
+`404`, `422` id bukan UUID.
 
 ---
 
 ## POST /kategori-dokumen
 
-**Admin/HRD only.** Body: `{ "namaKategori": "...", "deskripsi": "... (opsional)" }`.
+**Admin/HRD only.** Body:
+`{ "namaKategori": "...", "deskripsi": "... (opsional)", "wajibApproval": false (opsional, default false) }`.
+`wajibApproval` menentukan apakah dokumen pada kategori ini memerlukan approval admin/HRD sebelum
+"berlaku" (FR-DOC-010) — lihat catatan di Bagian 9.
 
 Response `201`. Error: `401`, `403` bukan admin/HRD, `409` `namaKategori` sudah dipakai, `422` field
-tidak valid.
+tidak valid (termasuk `wajibApproval` bukan boolean).
 
 ---
 
 ## PATCH /kategori-dokumen/{id}
 
-**Admin/HRD only.** Body sebagian (`namaKategori` dan/atau `deskripsi`).
+**Admin/HRD only.** Body sebagian (`namaKategori`, `deskripsi`, dan/atau `wajibApproval`).
 
 Response `200`. Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `409` `namaKategori`
-bentrok, `422` field tidak valid.
+bentrok, `422` field tidak valid (termasuk `wajibApproval` bukan boolean).
 
 ---
 

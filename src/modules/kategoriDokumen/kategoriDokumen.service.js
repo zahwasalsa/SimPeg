@@ -6,6 +6,7 @@ const sanitizeKategoriDokumen = (row) => ({
   id: row.id,
   namaKategori: row.nama_kategori,
   deskripsi: row.deskripsi,
+  wajibApproval: row.wajib_approval,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -26,7 +27,7 @@ const getKategoriDokumenById = async (id) => {
   return sanitizeKategoriDokumen(kategori);
 };
 
-const createKategoriDokumen = async ({ namaKategori, deskripsi }) => {
+const createKategoriDokumen = async ({ namaKategori, deskripsi, wajibApproval }) => {
   const existing = await kategoriDokumenRepository.findByNama(namaKategori);
   if (existing) {
     throw new AppError("Nama kategori sudah terdaftar", 409);
@@ -36,6 +37,7 @@ const createKategoriDokumen = async ({ namaKategori, deskripsi }) => {
     const created = await kategoriDokumenRepository.create({
       nama_kategori: namaKategori,
       deskripsi: deskripsi || null,
+      wajib_approval: wajibApproval || false,
     });
     logger.info("Kategori dokumen created", { kategoriDokumenId: created.id });
     return sanitizeKategoriDokumen(created);
@@ -47,7 +49,7 @@ const createKategoriDokumen = async ({ namaKategori, deskripsi }) => {
   }
 };
 
-const updateKategoriDokumen = async (id, { namaKategori, deskripsi }) => {
+const updateKategoriDokumen = async (id, { namaKategori, deskripsi, wajibApproval }) => {
   const existing = await kategoriDokumenRepository.findById(id);
   if (!existing) {
     throw new AppError("Kategori dokumen tidak ditemukan", 404);
@@ -66,6 +68,9 @@ const updateKategoriDokumen = async (id, { namaKategori, deskripsi }) => {
   }
   if (deskripsi !== undefined) {
     payload.deskripsi = deskripsi;
+  }
+  if (wajibApproval !== undefined) {
+    payload.wajib_approval = wajibApproval;
   }
 
   try {

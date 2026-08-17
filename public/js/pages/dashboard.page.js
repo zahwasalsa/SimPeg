@@ -56,12 +56,15 @@ const loadManageStats = async () => {
 
   // limit=1 keeps the payload minimal — we only need `pagination.total`,
   // which every list endpoint already returns (no new backend work).
-  const [divisiRes, jabatanRes, cutiPendingRes, pegawaiRes] = await Promise.allSettled([
-    listDivisi({ page: 1, limit: 1 }),
-    listJabatan({ page: 1, limit: 1 }),
-    listCuti({ page: 1, limit: 1, status: "diajukan" }),
-    listPegawai({ page: 1, limit: 1, status: "aktif" }),
-  ]);
+  const [divisiRes, jabatanRes, cutiPendingRes, pegawaiRes, dokumenPendingRes, dokumenExpiringRes] =
+    await Promise.allSettled([
+      listDivisi({ page: 1, limit: 1 }),
+      listJabatan({ page: 1, limit: 1 }),
+      listCuti({ page: 1, limit: 1, status: "diajukan" }),
+      listPegawai({ page: 1, limit: 1, status: "aktif" }),
+      listDokumen({ page: 1, limit: 1, status: "menunggu_persetujuan" }),
+      listDokumen({ page: 1, limit: 1, akanKedaluwarsa: true }),
+    ]);
 
   const cards = [];
   if (pegawaiRes.status === "fulfilled") {
@@ -75,6 +78,14 @@ const loadManageStats = async () => {
   }
   if (cutiPendingRes.status === "fulfilled") {
     cards.push(statCard("Cuti Menunggu Persetujuan", cutiPendingRes.value.pagination.total, "/cuti"));
+  }
+  if (dokumenPendingRes.status === "fulfilled") {
+    cards.push(
+      statCard("Dokumen Menunggu Persetujuan", dokumenPendingRes.value.pagination.total, "/dokumen"),
+    );
+  }
+  if (dokumenExpiringRes.status === "fulfilled") {
+    cards.push(statCard("Dokumen Akan Kedaluwarsa", dokumenExpiringRes.value.pagination.total, "/dokumen"));
   }
 
   statsEl.innerHTML =
@@ -127,9 +138,10 @@ const loadOwnDivisiJabatan = async (user) => {
     );
   }
 
-  const [absensiRes, cutiRes] = await Promise.allSettled([
+  const [absensiRes, cutiRes, dokumenExpiringRes] = await Promise.allSettled([
     listAbsensi({ page: 1, limit: 1, tanggal: todayStr() }),
     listCuti({ page: 1, limit: 1, status: "diajukan" }),
+    listDokumen({ page: 1, limit: 1, akanKedaluwarsa: true }),
   ]);
 
   if (absensiRes.status === "fulfilled") {
@@ -138,6 +150,11 @@ const loadOwnDivisiJabatan = async (user) => {
   }
   if (cutiRes.status === "fulfilled") {
     cards.push(statCard("Cuti Menunggu Persetujuan", cutiRes.value.pagination.total, "/cuti"));
+  }
+  if (dokumenExpiringRes.status === "fulfilled") {
+    cards.push(
+      statCard("Dokumen Anda Akan Kedaluwarsa", dokumenExpiringRes.value.pagination.total, "/dokumen"),
+    );
   }
 
   statsEl.innerHTML = cards.join("");
@@ -148,34 +165,68 @@ const loadStats = async (user) =>
 
 // --- Reminder ---
 
+const reminderAlert = (variant, message, href, ctaLabel) => `
+  <div class="alert alert-${variant} d-flex justify-content-between align-items-center mb-2">
+    <span>${message}</span>
+    <a href="${href}" class="btn btn-sm btn-${variant}">${escapeHtml(ctaLabel)}</a>
+  </div>`;
+
 const loadReminders = async (user) => {
   const el = document.getElementById("dashboard-reminders");
   el.innerHTML = "";
 
+  const alerts = [];
+
   try {
     if (MANAGE_ROLES.includes(user.role)) {
-      const res = await listCuti({ page: 1, limit: 1, status: "diajukan" });
-      const total = res.pagination.total;
-      if (total > 0) {
-        el.innerHTML = `
-          <div class="alert alert-warning d-flex justify-content-between align-items-center mb-0">
-            <span>Ada <strong>${total}</strong> pengajuan cuti yang menunggu persetujuan Anda.</span>
-            <a href="/cuti" class="btn btn-sm btn-warning">Tinjau Sekarang</a>
-          </div>`;
+      const [cutiRes, dokumenPendingRes] = await Promise.all([
+        listCuti({ page: 1, limit: 1, status: "diajukan" }),
+        listDokumen({ page: 1, limit: 1, status: "menunggu_persetujuan" }),
+      ]);
+      if (cutiRes.pagination.total > 0) {
+        alerts.push(
+          reminderAlert(
+            "warning",
+            `Ada <strong>${cutiRes.pagination.total}</strong> pengajuan cuti yang menunggu persetujuan Anda.`,
+            "/cuti",
+            "Tinjau Sekarang",
+          ),
+        );
       }
-      return;
-    }
-
-    if (SELF_SERVICE_ROLES.includes(user.role)) {
+      if (dokumenPendingRes.pagination.total > 0) {
+        alerts.push(
+          reminderAlert(
+            "warning",
+            `Ada <strong>${dokumenPendingRes.pagination.total}</strong> dokumen yang menunggu persetujuan Anda.`,
+            "/dokumen",
+            "Tinjau Sekarang",
+          ),
+        );
+      }
+    } else if (SELF_SERVICE_ROLES.includes(user.role)) {
       const res = await listAbsensi({ page: 1, limit: 1, tanggal: todayStr() });
       if (res.data.length === 0) {
-        el.innerHTML = `
-          <div class="alert alert-info d-flex justify-content-between align-items-center mb-0">
-            <span>Anda belum absen hari ini.</span>
-            <a href="/absensi" class="btn btn-sm btn-info">Absen Sekarang</a>
-          </div>`;
+        alerts.push(reminderAlert("info", "Anda belum absen hari ini.", "/absensi", "Absen Sekarang"));
       }
     }
+
+    // Expiring-document reminder applies to every role — self-scoped for
+    // pegawai/pimpinan (the Service always self-scopes non-manager roles),
+    // org-wide for admin/hrd.
+    const dokumenExpiringRes = await listDokumen({ page: 1, limit: 1, akanKedaluwarsa: true });
+    if (dokumenExpiringRes.pagination.total > 0) {
+      const subject = MANAGE_ROLES.includes(user.role) ? "" : "Anda ";
+      alerts.push(
+        reminderAlert(
+          "info",
+          `Ada <strong>${dokumenExpiringRes.pagination.total}</strong> dokumen ${subject}yang akan/sudah kedaluwarsa.`,
+          "/dokumen",
+          "Lihat Dokumen",
+        ),
+      );
+    }
+
+    el.innerHTML = alerts.join("");
   } catch {
     // Reminder is a convenience, not critical — fail silently rather than
     // showing an alert about the alert itself.
@@ -248,6 +299,12 @@ const cutiActivityList = (rows, pegawaiMap) => {
   return `<ul class="list-group list-group-flush">${items}</ul>`;
 };
 
+const DOKUMEN_STATUS_VARIANTS = {
+  menunggu_persetujuan: { color: "warning", label: "Menunggu Persetujuan" },
+  disetujui: { color: "success", label: "Disetujui" },
+  ditolak: { color: "danger", label: "Ditolak" },
+};
+
 const dokumenActivityList = (rows, pegawaiMap) => {
   if (rows.length === 0) {
     return emptyActivity("Belum ada dokumen diunggah.");
@@ -258,7 +315,10 @@ const dokumenActivityList = (rows, pegawaiMap) => {
       return `
         <li class="list-group-item d-flex justify-content-between align-items-center">
           <span>${who ? `<strong>${who}</strong> — ` : ""}${escapeHtml(row.namaDokumen)}</span>
-          <span class="text-muted small">${formatDateTime(row.createdAt)}</span>
+          <span class="d-flex align-items-center gap-2">
+            ${row.status ? renderStatusBadge(row.status, DOKUMEN_STATUS_VARIANTS) : ""}
+            <span class="text-muted small">${formatDateTime(row.createdAt)}</span>
+          </span>
         </li>`;
     })
     .join("");

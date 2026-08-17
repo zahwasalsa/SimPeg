@@ -15,6 +15,7 @@ const createValidation = [
     .isLength({ min: 1, max: 150 })
     .withMessage("namaKategori wajib diisi (maksimal 150 karakter)"),
   body("deskripsi").optional({ nullable: true }).isString().withMessage("deskripsi harus berupa teks"),
+  body("wajibApproval").optional().isBoolean().withMessage("wajibApproval harus berupa boolean").toBoolean(),
 ];
 
 const updateValidation = [
@@ -26,6 +27,7 @@ const updateValidation = [
     .isLength({ min: 1, max: 150 })
     .withMessage("namaKategori tidak valid (maksimal 150 karakter)"),
   body("deskripsi").optional({ nullable: true }).isString().withMessage("deskripsi harus berupa teks"),
+  body("wajibApproval").optional().isBoolean().withMessage("wajibApproval harus berupa boolean").toBoolean(),
 ];
 
 module.exports = { listValidation, idParamValidation, createValidation, updateValidation };

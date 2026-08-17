@@ -50,6 +50,16 @@ const renderField = (field) => {
       </div>`;
   }
 
+  if (field.type === "checkbox") {
+    const checked = field.value ? "checked" : "";
+    return `
+      <div class="mb-3 form-check">
+        <input type="checkbox" class="form-check-input" id="field-${field.name}" name="${field.name}" value="true" ${checked} />
+        <label class="form-check-label" for="field-${field.name}">${escapeHtml(field.label)}</label>
+        ${helpHtml(field)}
+      </div>`;
+  }
+
   if (field.type === "select") {
     const options = (field.options || [])
       .map(

@@ -123,6 +123,8 @@ test("POST /kategori-dokumen - admin can create", async () => {
 
   assert.equal(res.status, 201);
   assert.equal(res.body.data.namaKategori, namaKategoriA);
+  // wajibApproval defaults to false when not sent.
+  assert.equal(res.body.data.wajibApproval, false);
   kategoriAId = res.body.data.id;
 });
 
@@ -198,6 +200,28 @@ test("PATCH /kategori-dokumen/:id - non-existent id returns 404", async () => {
     .set("Authorization", `Bearer ${accounts.admin.token}`)
     .send({ deskripsi: "Ghost" });
   assert.equal(res.status, 404);
+});
+
+test("PATCH /kategori-dokumen/:id - admin can flag a kategori as wajibApproval", async () => {
+  const res = await request(app)
+    .patch(`/api/v1/kategori-dokumen/${kategoriBId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`)
+    .send({ wajibApproval: true });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.wajibApproval, true);
+
+  const getRes = await request(app)
+    .get(`/api/v1/kategori-dokumen/${kategoriBId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(getRes.body.data.wajibApproval, true);
+});
+
+test("PATCH /kategori-dokumen/:id - rejects non-boolean wajibApproval (422)", async () => {
+  const res = await request(app)
+    .patch(`/api/v1/kategori-dokumen/${kategoriBId}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`)
+    .send({ wajibApproval: "yes" });
+  assert.equal(res.status, 422);
 });
 
 // --- DELETE /api/v1/kategori-dokumen/:id ---

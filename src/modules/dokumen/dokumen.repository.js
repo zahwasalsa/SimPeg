@@ -1,14 +1,22 @@
 const supabase = require("../../database/supabaseClient");
 
+const toDateString = (date) => date.toISOString().slice(0, 10);
+
 const SELECT_COLUMNS =
   "id, pegawai_id, kategori_dokumen_id, nama_dokumen, nama_file_asli, file_path, bucket, " +
-  "mime_type, ukuran_file, diunggah_oleh, versi_aktif, created_at, updated_at";
+  "mime_type, ukuran_file, diunggah_oleh, versi_aktif, status, disetujui_oleh, " +
+  "tanggal_persetujuan, catatan_approval, tanggal_kedaluwarsa, created_at, updated_at";
 
 const VERSION_SELECT_COLUMNS =
   "id, dokumen_id, nomor_versi, nama_file_asli, file_path, bucket, mime_type, ukuran_file, " +
   "diunggah_oleh, created_at, updated_at";
 
-const findAll = async ({ page, limit, pegawaiId, kategoriDokumenId }) => {
+// Reminder window for FR-DOC-009 — documents expiring within this many days
+// (or already expired) are surfaced. Not user-configurable; kept as a single
+// constant since no requirement specifies otherwise.
+const EXPIRY_REMINDER_DAYS = 30;
+
+const findAll = async ({ page, limit, pegawaiId, kategoriDokumenId, status, akanKedaluwarsa }) => {
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
@@ -23,6 +31,14 @@ const findAll = async ({ page, limit, pegawaiId, kategoriDokumenId }) => {
   }
   if (kategoriDokumenId) {
     query = query.eq("kategori_dokumen_id", kategoriDokumenId);
+  }
+  if (status) {
+    query = query.eq("status", status);
+  }
+  if (akanKedaluwarsa) {
+    const threshold = new Date();
+    threshold.setDate(threshold.getDate() + EXPIRY_REMINDER_DAYS);
+    query = query.not("tanggal_kedaluwarsa", "is", null).lte("tanggal_kedaluwarsa", toDateString(threshold));
   }
 
   const { data, error, count } = await query.range(from, to);
@@ -82,8 +98,41 @@ const kategoriDokumenExists = async (kategoriDokumenId) => {
   return !error && !!data;
 };
 
+// Reads the category's wajib_approval flag so the Service can decide the
+// dokumen's initial status (FR-DOC-010). Returns null if the category
+// doesn't exist — callers already validate existence separately via
+// kategoriDokumenExists before reaching this.
+const findKategoriDokumenWajibApproval = async (kategoriDokumenId) => {
+  const { data, error } = await supabase
+    .from("kategori_dokumen")
+    .select("wajib_approval")
+    .eq("id", kategoriDokumenId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error || !data) {
+    return null;
+  }
+  return data.wajib_approval;
+};
+
 const create = async (payload) => {
   const { data, error } = await supabase.from("dokumen").insert(payload).select(SELECT_COLUMNS).single();
+  if (error) {
+    throw error;
+  }
+  return data;
+};
+
+// Generic partial update — used for approve/reject (status + approval
+// metadata) and for resetting status back to menunggu_persetujuan when a
+// new version is uploaded on a wajib_approval dokumen.
+const update = async (id, payload) => {
+  const { data, error } = await supabase
+    .from("dokumen")
+    .update(payload)
+    .eq("id", id)
+    .select(SELECT_COLUMNS)
+    .single();
   if (error) {
     throw error;
   }
@@ -216,7 +265,9 @@ module.exports = {
   findPegawaiIdByUserId,
   pegawaiExists,
   kategoriDokumenExists,
+  findKategoriDokumenWajibApproval,
   create,
+  update,
   findVersionsByDokumenId,
   findVersionById,
   findVersionByDokumenIdAndId,

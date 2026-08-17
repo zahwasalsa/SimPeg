@@ -1,12 +1,25 @@
 import { apiFetch } from "./client.js";
 
-export const listDokumen = ({ page = 1, limit = 10, pegawaiId, kategoriDokumenId } = {}) => {
+export const listDokumen = ({
+  page = 1,
+  limit = 10,
+  pegawaiId,
+  kategoriDokumenId,
+  status,
+  akanKedaluwarsa,
+} = {}) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (pegawaiId) {
     params.set("pegawaiId", pegawaiId);
   }
   if (kategoriDokumenId) {
     params.set("kategoriDokumenId", kategoriDokumenId);
+  }
+  if (status) {
+    params.set("status", status);
+  }
+  if (akanKedaluwarsa) {
+    params.set("akanKedaluwarsa", "true");
   }
   return apiFetch(`/dokumen?${params.toString()}`);
 };
@@ -39,5 +52,11 @@ export const getDokumenVersiUrl = (dokumenId, versionId, { download } = {}) => {
   const params = download ? "?download=1" : "";
   return apiFetch(`/dokumen/${dokumenId}/versi/${versionId}/download${params}`);
 };
+
+export const approveDokumen = (id, payload = {}) =>
+  apiFetch(`/dokumen/${id}/approve`, { method: "PATCH", body: payload });
+
+export const rejectDokumen = (id, payload) =>
+  apiFetch(`/dokumen/${id}/reject`, { method: "PATCH", body: payload });
 
 export const deleteDokumen = (id) => apiFetch(`/dokumen/${id}`, { method: "DELETE" });
