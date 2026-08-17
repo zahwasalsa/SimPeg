@@ -32,6 +32,10 @@ const MENU = [
   // pimpinan cannot upload (POST is 403 for them) but can still view/download
   // their own, so the link stays visible for them too — same pattern as Cuti.
   { label: "Dokumen", href: "/dokumen", roles: ALL_ROLES },
+  // GET /kpi is open to every role and self-scoped server-side (pegawai only
+  // ever sees their own records); pegawai/hrd/admin can write, pimpinan is
+  // view-only (write endpoints 403 for them) but the link stays visible.
+  { label: "KPI", href: "/kpi", roles: ALL_ROLES },
   // GET /users (list) is admin-only at the backend — even hrd gets 403,
   // unlike Pegawai's admin+hrd matrix — so this link is stricter than Pegawai.
   { label: "Manajemen User", href: "/users", roles: ADMIN_ONLY },

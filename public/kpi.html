@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KPI - SimPeg</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="/css/app.css" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="app-navbar"></div>
+    <main class="container py-4">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h1 class="h3 mb-0">KPI</h1>
+        <div class="d-flex gap-2">
+          <button id="kpi-export-btn" type="button" class="btn btn-outline-secondary">Ekspor Laporan</button>
+          <button id="kpi-add-btn" type="button" class="btn btn-primary d-none">+ Tambah KPI</button>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3" id="kpi-summary-cards"></div>
+
+      <div class="row g-2 mb-3">
+        <div class="col-sm-4 d-none" id="kpi-filter-pegawai-wrap">
+          <select id="kpi-filter-pegawai" class="form-select" aria-label="Filter pegawai">
+            <option value="">Semua Pegawai</option>
+          </select>
+        </div>
+        <div class="col-sm-4">
+          <input
+            id="kpi-filter-period"
+            type="text"
+            class="form-control"
+            placeholder="Filter periode (contoh: 2026-1)"
+          />
+        </div>
+        <div class="col-sm-4">
+          <select id="kpi-filter-status" class="form-select" aria-label="Filter status KPI">
+            <option value="">Semua Status</option>
+            <option value="not_started">Belum Mulai</option>
+            <option value="on_track">On Track</option>
+            <option value="at_risk">Berisiko</option>
+            <option value="achieved">Tercapai</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body p-0" id="kpi-table"></div>
+      </div>
+      <div class="mt-3" id="kpi-pagination"></div>
+    </main>
+
+    <script src="/js/config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="/js/pages/kpi.page.js"></script>
+  </body>
+</html>

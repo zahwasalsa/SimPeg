@@ -371,7 +371,117 @@ dokumen_version
 
 ---
 
-# 13. Roadmap Karier
+# 13. KPI
+
+Sesuai `docs/roadmap.md` Phase 6 (dependency: Pegawai — sudah selesai) dan blueprint
+FR-KPI-001 s/d FR-KPI-007. Tidak ada alur approval/verifikasi untuk KPI — blueprint tidak
+mensyaratkannya (berbeda dari Dokumen/Layanan Administrasi yang eksplisit punya requirement
+approval), jadi modul ini murni: HRD/Admin menetapkan target → pegawai menginput capaian →
+sistem menghitung persentase & status otomatis.
+
+## kpi
+
+Target dan capaian KPI per pegawai per periode. Adaptasi dari `kpis` pada blueprint §18
+(nama tabel disesuaikan ke konvensi tunggal proyek ini, sama seperti `documents` → `dokumen`).
+
+Kolom
+
+- id
+- pegawai_id — FK ke `pegawai.id`, `ON DELETE CASCADE`
+- period — VARCHAR(20). Format bebas (blueprint hanya memberi contoh `"2026-1"`/`"2026-2"`,
+  bukan aturan format baku), jadi tidak dipaksakan lewat CHECK constraint.
+- target — NUMERIC. Ditetapkan oleh HRD/Admin saat membuat record (FR-KPI-001); pegawai tidak
+  pernah bisa mengubahnya.
+- achievement — NUMERIC, default 0. Diisi pegawai (FR-KPI-002) pada KPI yang tidak memiliki
+  rincian indikator (`kpi_detail`). **Saat KPI punya `kpi_detail`, kolom ini menjadi
+  turunan/read-only dalam praktik** — setiap kali Service menghitung ulang `percentage` dari
+  rincian indikator, `achievement` ditulis ulang mengikuti `percentage / 100 * target` supaya
+  tetap konsisten (membaca `achievement`/`target` langsung selalu menghasilkan `percentage` yang
+  sama, walau perhitungan sebenarnya berasal dari `kpi_detail`). Nilai yang dikirim manual lewat
+  `PATCH` pada KPI semacam ini akan tertimpa oleh perhitungan ulang berikutnya.
+- percentage — NUMERIC(5,2), default 0. **Bukan** kolom `GENERATED` SQL — dihitung dan ditulis
+  ulang oleh Service layer setiap kali `achievement`, `target`, atau salah satu `kpi_detail`
+  miliknya berubah (FR-KPI-004), **tidak pernah dibatasi maksimal 100** (capaian boleh melebihi
+  target — nilai aslinya tidak boleh hilang). Formula:
+  - Tanpa `kpi_detail`: `achievement / target * 100`, atau `0` jika `target = 0` (bukan division
+    by zero).
+  - Dengan `kpi_detail`: setiap indikator punya `realization / target * 100` sendiri (`0` jika
+    `target` indikator itu `0`), lalu KPI-nya adalah rata-rata tertimbang
+    `Σ(detail percentage × weight) / Σ(weight)`, atau `0` jika `Σ(weight) = 0` (guard yang sama
+    seperti `target = 0`, bukan aturan tersendiri).
+
+  Formula ini adalah keputusan desain eksplisit (blueprint tidak merincikannya) — dipilih karena
+  hanya interpretasi ini yang membuat `kpi_detail.weight` (dari blueprint sendiri) benar-benar
+  terpakai.
+- status — VARCHAR(20), default `'not_started'`,
+  `CHECK (status IN ('not_started', 'on_track', 'at_risk', 'achieved'))` — persis 4 nilai enum
+  blueprint §18. Threshold eksplisit (blueprint tidak menetapkan angka apa pun, jadi ini
+  didokumentasikan di sini, bukan tersebar di banyak file — lihat `AT_RISK_UPPER_BOUND` di
+  `kpi.service.js`):
+  - `percentage === 0` → `not_started`
+  - `0 < percentage < 70` → `at_risk`
+  - `70 <= percentage < 100` → `on_track`
+  - `percentage >= 100` → `achieved`
+- created_at
+- updated_at
+- deleted_at
+
+Constraint
+
+- `UNIQUE (pegawai_id, period)` — satu pegawai hanya boleh punya satu record KPI per periode
+  (pola yang identik dengan `absensi`'s `UNIQUE(pegawai_id, tanggal)`).
+
+Index
+
+- idx_kpi_pegawai_id
+- idx_kpi_status
+- idx_kpi_period
+
+---
+
+## kpi_detail
+
+Rincian KPI per indikator (opsional — sebuah `kpi` boleh tidak punya `kpi_detail` sama sekali
+dan tetap berfungsi lewat kolom `achievement` di level `kpi`). Adaptasi dari `kpi_details` pada
+blueprint §18. Berbeda dari `dokumen_version`, tabel ini **bukan** riwayat immutable — HRD/Admin
+dapat menambah, mengubah, dan menghapus baris indikator kapan pun, sehingga tetap memiliki
+`deleted_at` (soft delete), bukan hanya `created_at`/`updated_at`.
+
+Kolom
+
+- id
+- kpi_id — FK ke `kpi.id`, `ON DELETE CASCADE`
+- indicator — VARCHAR(200). Nama indikator, ditetapkan HRD/Admin.
+- target — NUMERIC. Ditetapkan HRD/Admin.
+- realization — NUMERIC, default 0. Diisi pegawai (FR-KPI-002) — satu-satunya kolom yang boleh
+  diubah pegawai pada baris ini.
+- weight — NUMERIC, default 0. Bobot indikator dalam perhitungan `kpi.percentage`. Blueprint
+  tidak menetapkan skala (mis. 0–1 atau 0–100) atau aturan "total bobot harus 100", sehingga
+  tidak ada CHECK constraint terkait ini — perhitungan di Service layer menangani total bobot 0
+  dengan fallback ke rata-rata sederhana antar indikator.
+- created_at
+- updated_at
+- deleted_at
+
+Index
+
+- idx_kpi_detail_kpi_id
+
+Relasi
+
+kpi
+
+1
+
+↓
+
+N
+
+kpi_detail
+
+---
+
+# 14. Roadmap Karier
 
 ## roadmap_karier
 
@@ -387,7 +497,7 @@ Status.
 
 ---
 
-# 14. Penelitian
+# 15. Penelitian
 
 ## penelitian
 
@@ -407,7 +517,7 @@ Hak Kekayaan Intelektual.
 
 ---
 
-# 15. Sertifikasi
+# 16. Sertifikasi
 
 ## sertifikasi
 
@@ -421,7 +531,7 @@ Reminder.
 
 ---
 
-# 16. Pelatihan
+# 17. Pelatihan
 
 ## pelatihan
 
@@ -435,7 +545,7 @@ Tanggal.
 
 ---
 
-# 17. Layanan Administrasi
+# 18. Layanan Administrasi
 
 ## layanan
 
@@ -471,7 +581,7 @@ Catatan.
 
 ---
 
-# 18. Notification
+# 19. Notification
 
 ## notifications
 
@@ -489,7 +599,7 @@ Expired Certification.
 
 ---
 
-# 19. Activity Logs
+# 20. Activity Logs
 
 ## activity_logs
 
@@ -511,7 +621,7 @@ Timestamp.
 
 ---
 
-# 20. Relationship
+# 21. Relationship
 
 users
 
@@ -532,6 +642,16 @@ pegawai
 N
 
 dokumen
+
+pegawai
+
+1
+
+↓
+
+N
+
+kpi
 
 pegawai
 
@@ -603,6 +723,16 @@ N
 
 dokumen_version
 
+kpi
+
+1
+
+↓
+
+N
+
+kpi_detail
+
 roles
 
 1
@@ -625,7 +755,7 @@ permissions
 
 ---
 
-# 21. Indexing
+# 22. Indexing
 
 Seluruh kolom berikut wajib memiliki index.
 
@@ -645,7 +775,7 @@ status
 
 ---
 
-# 22. Constraints
+# 23. Constraints
 
 Email unik.
 
@@ -661,7 +791,7 @@ Approval tidak boleh tanpa pengajuan.
 
 ---
 
-# 23. Storage Rules
+# 24. Storage Rules
 
 File fisik berada pada
 
@@ -676,7 +806,7 @@ Database hanya menyimpan
 
 ---
 
-# 24. Migration Rules
+# 25. Migration Rules
 
 Seluruh perubahan database menggunakan migration SQL.
 
@@ -686,7 +816,7 @@ Tidak diperbolehkan mengubah migration lama.
 
 ---
 
-# 25. Seed Data
+# 26. Seed Data
 
 Seed minimal
 
@@ -708,7 +838,7 @@ Administrator
 
 ---
 
-# 26. Backup
+# 27. Backup
 
 Backup dilakukan otomatis.
 
@@ -716,7 +846,7 @@ Backup database terpisah dari Storage.
 
 ---
 
-# 27. Security
+# 28. Security
 
 Seluruh tabel menggunakan
 
@@ -728,7 +858,7 @@ Sensitive data hanya dapat diakses role tertentu.
 
 ---
 
-# 28. Future Tables
+# 29. Future Tables
 
 Penambahan tabel harus memenuhi:
 
@@ -740,7 +870,7 @@ Penambahan tabel harus memenuhi:
 
 ---
 
-# 29. Definition of Done
+# 30. Definition of Done
 
 Database dianggap selesai apabila:
 

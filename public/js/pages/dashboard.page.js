@@ -8,6 +8,7 @@ import { getPegawai, listPegawai } from "../api/pegawai.js";
 import { listCuti } from "../api/cuti.js";
 import { listAbsensi } from "../api/absensi.js";
 import { listDokumen } from "../api/dokumen.js";
+import { getKpiSummary } from "../api/kpi.js";
 
 const MANAGE_ROLES = ["admin", "hrd"];
 // Pimpinan can view absensi/cuti but not submit either (POST is 403 for them
@@ -56,15 +57,23 @@ const loadManageStats = async () => {
 
   // limit=1 keeps the payload minimal — we only need `pagination.total`,
   // which every list endpoint already returns (no new backend work).
-  const [divisiRes, jabatanRes, cutiPendingRes, pegawaiRes, dokumenPendingRes, dokumenExpiringRes] =
-    await Promise.allSettled([
-      listDivisi({ page: 1, limit: 1 }),
-      listJabatan({ page: 1, limit: 1 }),
-      listCuti({ page: 1, limit: 1, status: "diajukan" }),
-      listPegawai({ page: 1, limit: 1, status: "aktif" }),
-      listDokumen({ page: 1, limit: 1, status: "menunggu_persetujuan" }),
-      listDokumen({ page: 1, limit: 1, akanKedaluwarsa: true }),
-    ]);
+  const [
+    divisiRes,
+    jabatanRes,
+    cutiPendingRes,
+    pegawaiRes,
+    dokumenPendingRes,
+    dokumenExpiringRes,
+    kpiSummaryRes,
+  ] = await Promise.allSettled([
+    listDivisi({ page: 1, limit: 1 }),
+    listJabatan({ page: 1, limit: 1 }),
+    listCuti({ page: 1, limit: 1, status: "diajukan" }),
+    listPegawai({ page: 1, limit: 1, status: "aktif" }),
+    listDokumen({ page: 1, limit: 1, status: "menunggu_persetujuan" }),
+    listDokumen({ page: 1, limit: 1, akanKedaluwarsa: true }),
+    getKpiSummary(),
+  ]);
 
   const cards = [];
   if (pegawaiRes.status === "fulfilled") {
@@ -86,6 +95,16 @@ const loadManageStats = async () => {
   }
   if (dokumenExpiringRes.status === "fulfilled") {
     cards.push(statCard("Dokumen Akan Kedaluwarsa", dokumenExpiringRes.value.pagination.total, "/dokumen"));
+  }
+  // FR-DASH-002: KPI Summary. Org-wide across all pegawai (getKpiSummary is
+  // only self-scoped for role "pegawai" — admin/hrd get the full aggregate).
+  if (kpiSummaryRes.status === "fulfilled") {
+    const kpiSummary = kpiSummaryRes.value.data;
+    cards.push(statCard("Total KPI Pegawai", kpiSummary.total, "/kpi"));
+    cards.push(statCard("Rata-rata Progress KPI", `${kpiSummary.averagePercentage}%`, "/kpi"));
+    cards.push(statCard("KPI Achieved", kpiSummary.byStatus.achieved, "/kpi"));
+    cards.push(statCard("KPI On Track", kpiSummary.byStatus.on_track, "/kpi"));
+    cards.push(statCard("KPI At Risk", kpiSummary.byStatus.at_risk, "/kpi"));
   }
 
   statsEl.innerHTML =
@@ -138,10 +157,14 @@ const loadOwnDivisiJabatan = async (user) => {
     );
   }
 
-  const [absensiRes, cutiRes, dokumenExpiringRes] = await Promise.allSettled([
+  const [absensiRes, cutiRes, dokumenExpiringRes, kpiSummaryRes] = await Promise.allSettled([
     listAbsensi({ page: 1, limit: 1, tanggal: todayStr() }),
     listCuti({ page: 1, limit: 1, status: "diajukan" }),
     listDokumen({ page: 1, limit: 1, akanKedaluwarsa: true }),
+    // getKpiSummary self-scopes for role "pegawai" and returns the org-wide
+    // aggregate for pimpinan (matches "Pimpinan: memantau KPI" — a monitoring
+    // role, not a personal-record view).
+    getKpiSummary(),
   ]);
 
   if (absensiRes.status === "fulfilled") {
@@ -155,6 +178,17 @@ const loadOwnDivisiJabatan = async (user) => {
     cards.push(
       statCard("Dokumen Anda Akan Kedaluwarsa", dokumenExpiringRes.value.pagination.total, "/dokumen"),
     );
+  }
+  // FR-DASH-002: KPI Summary — self-scoped for pegawai ("KPI saya"), org-wide
+  // for pimpinan (getKpiSummary only self-scopes role "pegawai").
+  if (kpiSummaryRes.status === "fulfilled") {
+    const kpiSummary = kpiSummaryRes.value.data;
+    const suffix = user.role === "pimpinan" ? " (Semua Pegawai)" : " Anda";
+    cards.push(statCard(`Total KPI${suffix}`, kpiSummary.total, "/kpi"));
+    cards.push(statCard(`Rata-rata Progress KPI${suffix}`, `${kpiSummary.averagePercentage}%`, "/kpi"));
+    cards.push(statCard(`KPI Achieved${suffix}`, kpiSummary.byStatus.achieved, "/kpi"));
+    cards.push(statCard(`KPI On Track${suffix}`, kpiSummary.byStatus.on_track, "/kpi"));
+    cards.push(statCard(`KPI At Risk${suffix}`, kpiSummary.byStatus.at_risk, "/kpi"));
   }
 
   statsEl.innerHTML = cards.join("");

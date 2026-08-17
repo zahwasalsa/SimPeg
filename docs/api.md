@@ -1122,6 +1122,281 @@ Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `409` masih digunaka
 
 ---
 
+# 9a. KPI
+
+Diimplementasikan sesuai `docs/roadmap.md` Phase 6 (dependency: Pegawai) dan blueprint FR-KPI-001
+s/d FR-KPI-007. Path aktual `/kpi` (bukan `/kpis` seperti draft blueprint). Seluruh endpoint
+memerlukan `Authorization: Bearer <accessToken>`. Role tidak pernah dicek di Controller — gate
+akses ada di `authMiddleware`/`authorize`/`kpi.authorize.js`, scope data diputuskan di Service.
+
+**Tidak ada alur approval/verifikasi untuk KPI** — ini keputusan desain eksplisit, bukan yang
+belum sempat dikerjakan: blueprint FR-KPI-001..007 tidak mensyaratkan approval sama sekali
+(berbeda dari Dokumen/FR-DOC-010 dan Layanan Administrasi/FR-SRV-008 yang eksplisit
+mensyaratkannya). Alurnya murni: HRD/Admin menetapkan target → pegawai menginput capaian →
+sistem menghitung persentase & status otomatis.
+
+**Role**
+
+- **Pegawai**: melihat KPI miliknya sendiri, dan menginput capaian (`achievement` pada `kpi`,
+  atau `realization` pada `kpi_detail`). Tidak bisa membuat/menghapus KPI, tidak bisa mengubah
+  `target`/`period`/`indicator`/`weight`.
+- **HRD/Admin**: mengelola target dan indikator KPI (create/update/delete `kpi` dan
+  `kpi_detail`), memantau KPI seluruh pegawai.
+- **Pimpinan**: hanya memantau — bisa melihat KPI siapa pun dan ringkasan/laporan, tidak bisa
+  menulis apa pun (endpoint create/update/delete selalu `403` untuknya, bahkan jika secara
+  kebetulan ada baris KPI yang tertaut ke profil pegawainya sendiri). Blueprint §8 hanya
+  menyebut "Dosen" sebagai pengelola KPI dan tidak menjelaskan peran Tenaga Kependidikan di
+  modul ini — desain yang dipakai di sini menyamaratakan seluruh role `pegawai` (Dosen maupun
+  Tenaga Kependidikan) agar konsisten dengan RBAC berbasis role di seluruh sistem, bukan
+  berbasis jabatan.
+
+**`kpi.percentage`/`kpi.status` dihitung server-side, tidak pernah diterima dari client** (lihat
+`docs/database.md` §13 untuk formula lengkap dan ambang batas `on_track`/`at_risk` yang dipakai
+— keputusan desain eksplisit karena blueprint tidak merincikan angkanya).
+
+---
+
+## GET /kpi
+
+Query params: `page`, `limit`, `pegawaiId` (UUID, hanya efektif untuk admin/hrd/pimpinan),
+`period` (string), `status` (`not_started`\|`on_track`\|`at_risk`\|`achieved`)
+
+- **Admin/HRD/Pimpinan**: melihat seluruh data, `pegawaiId` sebagai filter opsional.
+- **Pegawai**: parameter `pegawaiId` dari query **diabaikan** — hasil selalu otomatis di-scope
+  ke pegawai milik akun yang login. Jika akun belum punya profil pegawai, hasilnya `200` dengan
+  `data: []`.
+
+Response 200 — format pagination standar (lihat Bagian 3). Error: `401` tanpa token.
+
+---
+
+## GET /kpi/summary
+
+*(FR-KPI-006 — KPI Summary untuk Dashboard)* Query params: `pegawaiId` (UUID, hanya efektif
+untuk admin/hrd/pimpinan), `period` (string).
+
+- **Admin/HRD/Pimpinan**: agregat seluruh pegawai (atau satu pegawai bila `pegawaiId` dikirim).
+- **Pegawai**: selalu di-scope ke miliknya sendiri, `pegawaiId` di query diabaikan.
+
+Response 200
+
+```json
+{
+  "success": true,
+  "message": "Ringkasan KPI",
+  "data": {
+    "total": 12,
+    "byStatus": { "not_started": 2, "on_track": 5, "at_risk": 1, "achieved": 4 },
+    "byPeriod": { "2026-1": 7, "2026-2": 5 },
+    "averagePercentage": 68.42
+  }
+}
+```
+
+Error: `401`.
+
+---
+
+## GET /kpi/{id}
+
+**Admin/HRD/Pimpinan** bisa lihat siapa pun. **Pegawai** hanya bisa lihat miliknya sendiri
+(dicek lewat `kpi.pegawai_id` yang dicocokkan ke pegawai milik `req.user.id`). Response
+menyertakan `details` (daftar `kpi_detail` milik KPI ini) — untuk `GET /kpi` (list), `details`
+**tidak** disertakan (menghindari N+1 di seluruh halaman), lihat `GET /kpi/{id}/detail` untuk
+mengambilnya terpisah kalau perlu.
+
+Response 200
+
+```json
+{
+  "success": true,
+  "message": "Detail KPI",
+  "data": {
+    "id": "uuid", "pegawaiId": "uuid", "period": "2026-1",
+    "target": 100, "achievement": 80, "percentage": 80, "status": "on_track",
+    "createdAt": "...", "updatedAt": "...",
+    "details": [
+      { "id": "uuid", "kpiId": "uuid", "indicator": "Publikasi Jurnal", "target": 2,
+        "realization": 1, "weight": 50, "createdAt": "...", "updatedAt": "..." }
+    ]
+  }
+}
+```
+
+Error: `401`, `403` bukan admin/hrd/pimpinan dan bukan pemilik, `404` tidak ditemukan,
+`422` id bukan UUID
+
+---
+
+## POST /kpi
+
+*(FR-KPI-001)* **Admin/HRD only** — tidak ada self-service, pegawai tidak pernah membuat
+KPI-nya sendiri.
+
+```json
+{
+  "pegawaiId": "uuid",
+  "period": "2026-1",
+  "target": 100,
+  "details": [
+    { "indicator": "Publikasi Jurnal", "target": 2, "weight": 50 },
+    { "indicator": "Pengabdian Masyarakat", "target": 1, "weight": 50 }
+  ]
+}
+```
+
+`details` **opsional** — kalau dikirim, setiap entrinya langsung membuat satu baris
+`kpi_detail` sekaligus dengan KPI-nya (satu request, bukan panggilan terpisah per indikator).
+`weight` per entri opsional (default `0`). `achievement`/`details[].realization` tidak boleh
+dikirim (selalu `0` saat dibuat — itu bagian FR-KPI-002, dilakukan pegawai setelahnya lewat
+`PATCH`). Response `201`, `status` awal selalu `not_started`, `details` pada response berisi
+baris yang baru dibuat (array kosong kalau `details` tidak dikirim).
+
+Menambah indikator lagi setelah KPI dibuat tetap lewat `POST /kpi/{id}/detail` (lihat di bawah)
+— `details` di endpoint ini hanya untuk pembuatan awal.
+
+Error: `401`, `403` bukan admin/HRD, `404` `pegawaiId` tidak ditemukan, `409` kombinasi
+`pegawaiId`+`period` sudah ada, `422` field tidak valid atau `achievement`/`details[].realization`
+dikirim
+
+---
+
+## PATCH /kpi/{id}
+
+*(FR-KPI-002)* Perilaku berbeda tergantung role — endpoint yang sama, field yang boleh diubah
+berbeda:
+
+- **Admin/HRD**: boleh mengubah `target` dan/atau `period` milik siapa pun, dan boleh mengubah
+  `indicator`/`target`/`weight` pada indikator (`kpi_detail`) yang sudah ada lewat `details[]`.
+- **Pegawai**: hanya boleh mengubah `achievement`, dan/atau `realization` pada indikator
+  miliknya lewat `details[]` — mengirim `target`/`period` di level KPI, atau
+  `indicator`/`target`/`weight` di dalam salah satu entri `details[]`, ditolak `403`.
+- **Pimpinan**: selalu `403` — tidak ada jalur tulis sama sekali untuk role ini.
+
+`pegawaiId` tidak boleh diubah (`422` jika dikirim). Setiap entri `details[]` **wajib** membawa
+`id` (`kpi_detail.id` yang sudah ada) — endpoint ini hanya mengubah indikator yang sudah ada,
+bukan membuat baru (`404` kalau `id` tidak ditemukan atau bukan milik KPI `{id}` pada URL).
+Setiap perubahan `target`/`achievement`/`details[]` memicu satu kali perhitungan ulang
+`percentage`/`status` (lihat catatan formula di atas), dan response selalu menyertakan `details`
+terkini (sama seperti `GET /kpi/{id}`).
+
+```json
+{
+  "achievement": 85,
+  "details": [{ "id": "uuid-indikator-1", "realization": 2 }]
+}
+```
+
+Response 200 — objek KPI (termasuk `details`). Error: `401`, `403` (pimpinan, pegawai mengirim
+field selain `achievement`/`details[].realization`, atau pegawai menyasar KPI orang lain),
+`404` KPI tidak ditemukan atau `details[].id` bukan milik KPI ini, `409` perubahan `period`
+bentrok dengan KPI lain milik pegawai yang sama, `422` field tidak valid atau `details[].id`
+tidak dikirim
+
+---
+
+## DELETE /kpi/{id}
+
+**Admin/HRD only.** Soft delete (mengisi `deleted_at`) pada baris `kpi` — baris `kpi_detail`
+terkait tidak ikut dihapus (tetap ada, hanya tidak lagi terjangkau lewat KPI yang sudah
+disembunyikan).
+
+Response 200
+
+```json
+{ "success": true, "message": "Data KPI berhasil dihapus", "data": null }
+```
+
+Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `422` id bukan UUID
+
+---
+
+## GET /kpi/{id}/detail
+
+Daftar rincian indikator (`kpi_detail`) milik sebuah KPI. Permission sama seperti
+`GET /kpi/{id}`.
+
+Response 200
+
+```json
+{
+  "success": true,
+  "message": "Daftar rincian KPI",
+  "data": [
+    { "id": "uuid", "kpiId": "uuid", "indicator": "Publikasi Jurnal", "target": 2,
+      "realization": 1, "weight": 50, "createdAt": "...", "updatedAt": "..." }
+  ]
+}
+```
+
+Error: `401`, `403` bukan admin/hrd/pimpinan dan bukan pemilik, `404` KPI tidak ditemukan,
+`422` id bukan UUID
+
+---
+
+## POST /kpi/{id}/detail
+
+**Admin/HRD only** — mendefinisikan indikator baru pada sebuah KPI.
+
+```json
+{ "indicator": "Publikasi Jurnal", "target": 2, "weight": 50 }
+```
+
+`weight` opsional (default `0`). `realization` tidak boleh dikirim (selalu `0` saat dibuat).
+Menambah/mengubah/menghapus indikator selalu memicu perhitungan ulang `kpi.percentage`/`status`.
+
+Response `201`. Error: `401`, `403` bukan admin/HRD, `404` KPI tidak ditemukan, `422` field
+tidak valid atau `realization` dikirim
+
+---
+
+## PATCH /kpi/{id}/detail/{detailId}
+
+Perilaku berbeda tergantung role, sama seperti `PATCH /kpi/{id}`:
+
+- **Admin/HRD**: boleh mengubah `indicator`/`target`/`weight`.
+- **Pegawai**: hanya boleh mengubah `realization`, dan hanya pada indikator milik KPI-nya
+  sendiri — field lain ditolak `403`.
+- **Pimpinan**: selalu `403`.
+
+```json
+{ "realization": 2 }
+```
+
+Response 200 — objek `kpi_detail`. Error: `401`, `403` (pimpinan, pegawai mengirim field selain
+`realization`, atau pegawai menyasar indikator KPI orang lain), `404` KPI atau indikator tidak
+ditemukan (termasuk `detailId` yang bukan milik `{id}`), `422` field tidak valid
+
+---
+
+## DELETE /kpi/{id}/detail/{detailId}
+
+**Admin/HRD only.** Soft delete pada baris `kpi_detail`, memicu perhitungan ulang
+`kpi.percentage`/`status` pada KPI induknya.
+
+Response 200
+
+```json
+{ "success": true, "message": "Rincian KPI berhasil dihapus", "data": null }
+```
+
+Error: `401`, `403` bukan admin/HRD, `404` KPI atau indikator tidak ditemukan, `422` field
+tidak valid
+
+---
+
+**Ekspor laporan (FR-KPI-007).** Tidak ada endpoint backend khusus — `GET /kpi` sudah
+mengembalikan seluruh data yang dibutuhkan untuk sebuah laporan flat, sehingga ekspor
+dilakukan di frontend (unduh CSV dari hasil `GET /kpi` yang sedang tersaring — seluruh
+halaman diambil berurutan dengan `limit=100` mengikuti batas `listValidation`, bukan
+hanya halaman pertama — lihat `handleExport` di `public/js/pages/kpi.page.js`) tanpa
+endpoint tambahan. Kolom CSV: Pegawai, Periode, Target, Achievement, Percentage, Status.
+Admin/HRD mengekspor data sesuai filter yang sedang aktif di layar; pegawai hanya
+mengekspor KPI miliknya sendiri (`GET /kpi` sudah dibatasi ke baris milik sendiri untuk
+role pegawai, lihat §9a di atas).
+
+---
+
 # 10. Roadmap Karier
 
 GET

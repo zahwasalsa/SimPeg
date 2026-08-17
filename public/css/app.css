@@ -20,6 +20,14 @@ body {
   max-width: 480px;
 }
 
+/* KPI progress bar — width itself is set via JS (element.style.width) after
+   the row renders, never as an inline `style` HTML attribute, since the
+   app's CSP (style-src 'self') blocks inline style attributes. */
+.kpi-progress {
+  height: 20px;
+  min-width: 120px;
+}
+
 @media (max-width: 576px) {
   .container,
   .container-fluid {
