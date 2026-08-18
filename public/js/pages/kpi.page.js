@@ -405,6 +405,25 @@ const openInputCapaianModal = async (id) => {
   try {
     const res = await getKpi(id);
     const k = res.data;
+
+    // Bug: pegawai mengisi Capaian di sini pada KPI yang sudah punya indikator
+    // (kpi_detail), request tersimpan (200) tapi langsung tertimpa oleh
+    // recalculateKpi() di kpi.service.js — achievement pada KPI semacam ini
+    // selalu diturunkan dari realisasi tertimbang tiap indikator, bukan dari
+    // field ini (lihat docs/database.md §13). Sebelumnya field ini tetap
+    // ditampilkan tanpa penjelasan, jadi terlihat seperti "tidak bisa
+    // menyimpan". Untuk KPI seperti ini, arahkan langsung ke Detail supaya
+    // pegawai mengisi lewat "Input Realisasi" per indikator — yang memang
+    // jalur yang benar-benar tersimpan.
+    if (k.details.length > 0) {
+      showToast(
+        'KPI ini memakai indikator — isi capaian lewat "Input Realisasi" pada tiap indikator di bawah, bukan di sini.',
+        "warning",
+      );
+      openDetailModal(id);
+      return;
+    }
+
     openFormModal({
       title: "Input Capaian KPI",
       fields: [
@@ -755,11 +774,14 @@ const init = async () => {
 
   renderNavbar("/kpi");
 
-  // Pegawai lookup is needed for the "Pegawai" table column (admin/hrd/
-  // pimpinan all see multi-pegawai rows), but the filter dropdown itself is
-  // admin/HRD only per the approved design — pimpinan monitors everyone
-  // without a per-pegawai narrowing control.
-  if (canManage() || currentUser.role === "pimpinan") {
+  // GET /pegawai (list) is admin/hrd-only at the backend — pimpinan gets 403
+  // there, so this is only ever called for canManage() (matches the same fix
+  // already applied in roadmapKarier.page.js). The "Pegawai" table column
+  // still shows for pimpinan (lines below), it just falls back to the raw
+  // pegawaiId instead of a resolved name, since GET /pegawai can't be called
+  // for them at all — showing a column pimpinan can never populate a name
+  // for isn't the goal here, avoiding the guaranteed 403 on every load is.
+  if (canManage()) {
     try {
       await loadPegawaiLookup();
     } catch {
