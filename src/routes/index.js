@@ -9,6 +9,7 @@ const cutiRoutes = require("../modules/cuti/cuti.routes");
 const kategoriDokumenRoutes = require("../modules/kategoriDokumen/kategoriDokumen.routes");
 const dokumenRoutes = require("../modules/dokumen/dokumen.routes");
 const kpiRoutes = require("../modules/kpi/kpi.routes");
+const roadmapKarierRoutes = require("../modules/roadmapKarier/roadmapKarier.routes");
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use("/cuti", cutiRoutes);
 router.use("/kategori-dokumen", kategoriDokumenRoutes);
 router.use("/dokumen", dokumenRoutes);
 router.use("/kpi", kpiRoutes);
+router.use("/roadmap-karier", roadmapKarierRoutes);
 
 module.exports = router;

@@ -28,6 +28,65 @@ body {
   min-width: 120px;
 }
 
+/* Roadmap Karier visualization (FR-CAREER-005) — position track + a 3-stage
+   stepper (In Progress -> Eligible -> Promoted). Stage state is expressed via
+   classes only (is-complete/is-current), never inline style, so nothing here
+   runs into the CSP style-src restriction the way a dynamic width would. */
+.roadmap-progress {
+  height: 10px;
+}
+
+.roadmap-stepper {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.roadmap-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 90px;
+}
+
+.roadmap-step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: #adb5bd;
+  color: #fff;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.roadmap-step.is-complete .roadmap-step-dot {
+  background-color: #198754;
+}
+
+.roadmap-step.is-current .roadmap-step-dot {
+  background-color: #0d6efd;
+}
+
+.roadmap-step-label {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.roadmap-step-line {
+  flex: 1;
+  height: 2px;
+  margin: 0 0.25rem;
+  margin-top: 1.15rem;
+  background-color: #adb5bd;
+}
+
+.roadmap-step-line.is-complete {
+  background-color: #198754;
+}
+
 @media (max-width: 576px) {
   .container,
   .container-fluid {

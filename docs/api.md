@@ -1399,33 +1399,136 @@ role pegawai, lihat §9a di atas).
 
 # 10. Roadmap Karier
 
-GET
+Diimplementasikan sesuai `docs/roadmap.md` Phase 7 (dependency: Pegawai, KPI) dan blueprint
+FR-CAREER-001 s/d FR-CAREER-005. Path aktual `/roadmap-karier` (bukan `/career-roadmaps`
+seperti draft blueprint, mengikuti konvensi Indonesia snake_case yang sudah dipakai di
+seluruh proyek ini — sama seperti `/kpi` bukan `/kpis`). Seluruh endpoint memerlukan
+`Authorization: Bearer <accessToken>`. Role tidak pernah dicek di Controller — gate akses ada
+di `authMiddleware`/`authorize`/`roadmapKarier.authorize.js`, scope data diputuskan di
+Service.
 
-/career-roadmaps
+**Tidak ada alur approval/verifikasi** — blueprint FR-CAREER-001..005 tidak mensyaratkannya.
+
+**Role**
+
+- **Pegawai**: hanya memantau (view) roadmap karier miliknya sendiri. **Tidak ada jalur tulis
+  sama sekali** untuk role ini — endpoint `POST`/`PATCH`/`DELETE` selalu `403` untuk pegawai,
+  bahkan pada roadmap miliknya sendiri. Ini berbeda dari KPI (di mana pegawai boleh mengisi
+  `achievement`/`realization`) — blueprint hanya pernah menyebut pegawai "memantau
+  perkembangan karier... secara mandiri", tidak pernah menyebut pegawai mengisi data roadmap.
+- **HRD/Admin**: mengelola penuh (create/update/delete) roadmap karier seluruh pegawai —
+  menetapkan jabatan saat ini/target, persyaratan promosi, progres, dan status.
+- **Pimpinan**: hanya memantau — bisa melihat roadmap siapa pun, tidak bisa menulis apa pun
+  (endpoint create/update/delete selalu `403`). Sama seperti KPI.
+
+`roadmap_karier.progress`/`status` **tidak pernah dihitung otomatis oleh server** (beda dari
+`kpi.percentage`/`status`) — Admin/HRD menetapkannya langsung, hanya divalidasi rentang/enum
+(lihat `docs/database.md` §14 untuk penjelasan lengkap kenapa tidak ada formula).
 
 ---
 
-GET
+## GET /roadmap-karier
 
-/career-roadmaps/{id}
+Query params: `page`, `limit`, `pegawaiId` (UUID, hanya efektif untuk admin/hrd/pimpinan),
+`status` (`in_progress`\|`eligible`\|`promoted`)
 
----
+- **Admin/HRD/Pimpinan**: melihat seluruh data, `pegawaiId` sebagai filter opsional.
+- **Pegawai**: parameter `pegawaiId` dari query **diabaikan** — hasil selalu otomatis
+  di-scope ke pegawai milik akun yang login. Jika akun belum punya profil pegawai, hasilnya
+  `200` dengan `data: []`.
 
-POST
-
-/career-roadmaps
-
----
-
-PUT
-
-/career-roadmaps/{id}
+Response 200 — format pagination standar (lihat Bagian 3). Error: `401` tanpa token.
 
 ---
 
-DELETE
+## GET /roadmap-karier/{id}
 
-/career-roadmaps/{id}
+**Admin/HRD/Pimpinan** bisa lihat siapa pun. **Pegawai** hanya bisa lihat miliknya sendiri
+(dicek lewat `roadmap_karier.pegawai_id` yang dicocokkan ke pegawai milik `req.user.id`).
+
+Response 200
+
+```json
+{
+  "success": true,
+  "message": "Detail roadmap karier",
+  "data": {
+    "id": "uuid",
+    "pegawaiId": "uuid",
+    "jabatanSaatIniId": "uuid",
+    "jabatanTargetId": "uuid",
+    "persyaratan": "Minimal 2 tahun menjabat dan menyelesaikan pelatihan kepemimpinan",
+    "progress": 45,
+    "status": "eligible",
+    "createdAt": "...",
+    "updatedAt": "..."
+  }
+}
+```
+
+`jabatanSaatIniId`/`jabatanTargetId`/`persyaratan` bisa `null`. Error: `401`,
+`403` bukan admin/hrd/pimpinan dan bukan pemilik, `404` tidak ditemukan, `422` id bukan UUID
+
+---
+
+## POST /roadmap-karier
+
+*(FR-CAREER-001/002)* **Admin/HRD only** — tidak ada self-service, pegawai tidak pernah
+membuat roadmap-nya sendiri.
+
+```json
+{
+  "pegawaiId": "uuid",
+  "jabatanSaatIniId": "uuid",
+  "jabatanTargetId": "uuid",
+  "persyaratan": "Minimal 2 tahun menjabat dan menyelesaikan pelatihan kepemimpinan",
+  "progress": 0,
+  "status": "in_progress"
+}
+```
+
+Seluruh field selain `pegawaiId` **opsional**: `jabatanSaatIniId`/`jabatanTargetId` boleh
+`null`/tidak dikirim, `persyaratan` default kosong, `progress` default `0`, `status` default
+`"in_progress"`. Response `201`.
+
+Error: `401`, `403` bukan admin/HRD, `404` `pegawaiId`/`jabatanSaatIniId`/`jabatanTargetId`
+tidak ditemukan, `422` field tidak valid (`progress` di luar rentang 0–100, `status` di luar
+3 nilai enum, `jabatanSaatIniId`/`jabatanTargetId` bukan UUID valid)
+
+---
+
+## PATCH /roadmap-karier/{id}
+
+**Admin/HRD only.** Berbeda dari KPI, endpoint ini **tidak punya jalur akses untuk pegawai
+sama sekali** — role gate ada langsung di route (`authorize("admin", "hrd")`), bukan
+pola self-or-roles seperti `PATCH /kpi/:id`.
+
+`pegawaiId` tidak boleh diubah (`422` jika dikirim). Field lain (`jabatanSaatIniId`,
+`jabatanTargetId`, `persyaratan`, `progress`, `status`) seluruhnya opsional — hanya field
+yang dikirim yang diperbarui.
+
+```json
+{ "progress": 65, "status": "eligible" }
+```
+
+Response 200 — objek roadmap karier terkini. Error: `401`, `403` bukan admin/HRD (termasuk
+pegawai dan pimpinan, tanpa pengecualian kepemilikan), `404` roadmap atau
+`jabatanSaatIniId`/`jabatanTargetId` tidak ditemukan, `422` field tidak valid atau `pegawaiId`
+dikirim
+
+---
+
+## DELETE /roadmap-karier/{id}
+
+**Admin/HRD only.** Soft delete (mengisi `deleted_at`).
+
+Response 200
+
+```json
+{ "success": true, "message": "Data roadmap karier berhasil dihapus", "data": null }
+```
+
+Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `422` id bukan UUID
 
 ---
 

@@ -9,6 +9,7 @@ import { listCuti } from "../api/cuti.js";
 import { listAbsensi } from "../api/absensi.js";
 import { listDokumen } from "../api/dokumen.js";
 import { getKpiSummary } from "../api/kpi.js";
+import { listRoadmapKarier } from "../api/roadmapKarier.js";
 
 const MANAGE_ROLES = ["admin", "hrd"];
 // Pimpinan can view absensi/cuti but not submit either (POST is 403 for them
@@ -32,6 +33,24 @@ const ABSENSI_STATUS_VARIANTS = {
 };
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
+
+// FR-DASH-003: "Sistem menampilkan progres karier." No dedicated backend
+// summary endpoint exists for roadmap_karier (unlike KPI's getKpiSummary) —
+// per Tahap 3 scope this stays frontend-only and reuses the existing
+// GET /api/v1/roadmap-karier list endpoint (already self-scoped for pegawai,
+// org-wide otherwise). limit=100 is the same "good enough at this scale"
+// single-page fetch already used elsewhere for lookups (e.g. listPegawai
+// limit=100) — not a full pagination loop, since this is a lightweight
+// dashboard glance, not a report that must be exhaustive.
+const roadmapProgressSummary = async () => {
+  const res = await listRoadmapKarier({ page: 1, limit: 100 });
+  const rows = res.data;
+  if (rows.length === 0) {
+    return { total: 0, averageProgress: 0 };
+  }
+  const sum = rows.reduce((acc, row) => acc + Number(row.progress), 0);
+  return { total: rows.length, averageProgress: Math.round((sum / rows.length) * 100) / 100 };
+};
 
 const statCard = (label, value, href) => `
   <div class="col-6 col-md-3">
@@ -65,6 +84,7 @@ const loadManageStats = async () => {
     dokumenPendingRes,
     dokumenExpiringRes,
     kpiSummaryRes,
+    roadmapSummaryRes,
   ] = await Promise.allSettled([
     listDivisi({ page: 1, limit: 1 }),
     listJabatan({ page: 1, limit: 1 }),
@@ -73,6 +93,7 @@ const loadManageStats = async () => {
     listDokumen({ page: 1, limit: 1, status: "menunggu_persetujuan" }),
     listDokumen({ page: 1, limit: 1, akanKedaluwarsa: true }),
     getKpiSummary(),
+    roadmapProgressSummary(),
   ]);
 
   const cards = [];
@@ -105,6 +126,12 @@ const loadManageStats = async () => {
     cards.push(statCard("KPI Achieved", kpiSummary.byStatus.achieved, "/kpi"));
     cards.push(statCard("KPI On Track", kpiSummary.byStatus.on_track, "/kpi"));
     cards.push(statCard("KPI At Risk", kpiSummary.byStatus.at_risk, "/kpi"));
+  }
+  // FR-DASH-003: progres karier, rata-rata seluruh pegawai.
+  if (roadmapSummaryRes.status === "fulfilled") {
+    cards.push(
+      statCard("Rata-rata Progress Karier", `${roadmapSummaryRes.value.averageProgress}%`, "/roadmap-karier"),
+    );
   }
 
   statsEl.innerHTML =
@@ -157,15 +184,19 @@ const loadOwnDivisiJabatan = async (user) => {
     );
   }
 
-  const [absensiRes, cutiRes, dokumenExpiringRes, kpiSummaryRes] = await Promise.allSettled([
-    listAbsensi({ page: 1, limit: 1, tanggal: todayStr() }),
-    listCuti({ page: 1, limit: 1, status: "diajukan" }),
-    listDokumen({ page: 1, limit: 1, akanKedaluwarsa: true }),
-    // getKpiSummary self-scopes for role "pegawai" and returns the org-wide
-    // aggregate for pimpinan (matches "Pimpinan: memantau KPI" — a monitoring
-    // role, not a personal-record view).
-    getKpiSummary(),
-  ]);
+  const [absensiRes, cutiRes, dokumenExpiringRes, kpiSummaryRes, roadmapSummaryRes] =
+    await Promise.allSettled([
+      listAbsensi({ page: 1, limit: 1, tanggal: todayStr() }),
+      listCuti({ page: 1, limit: 1, status: "diajukan" }),
+      listDokumen({ page: 1, limit: 1, akanKedaluwarsa: true }),
+      // getKpiSummary self-scopes for role "pegawai" and returns the org-wide
+      // aggregate for pimpinan (matches "Pimpinan: memantau KPI" — a monitoring
+      // role, not a personal-record view).
+      getKpiSummary(),
+      // roadmapProgressSummary uses GET /roadmap-karier, which is likewise
+      // self-scoped for pegawai and org-wide for pimpinan.
+      roadmapProgressSummary(),
+    ]);
 
   if (absensiRes.status === "fulfilled") {
     const row = absensiRes.value.data[0];
@@ -189,6 +220,17 @@ const loadOwnDivisiJabatan = async (user) => {
     cards.push(statCard(`KPI Achieved${suffix}`, kpiSummary.byStatus.achieved, "/kpi"));
     cards.push(statCard(`KPI On Track${suffix}`, kpiSummary.byStatus.on_track, "/kpi"));
     cards.push(statCard(`KPI At Risk${suffix}`, kpiSummary.byStatus.at_risk, "/kpi"));
+  }
+  // FR-DASH-003: progres karier.
+  if (roadmapSummaryRes.status === "fulfilled") {
+    const roadmapSuffix = user.role === "pimpinan" ? " (Semua Pegawai)" : " Anda";
+    cards.push(
+      statCard(
+        `Progress Karier${roadmapSuffix}`,
+        `${roadmapSummaryRes.value.averageProgress}%`,
+        "/roadmap-karier",
+      ),
+    );
   }
 
   statsEl.innerHTML = cards.join("");

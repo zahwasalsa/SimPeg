@@ -483,17 +483,85 @@ kpi_detail
 
 # 14. Roadmap Karier
 
+Sesuai `docs/roadmap.md` Phase 7 (dependency: Pegawai, KPI — keduanya sudah selesai) dan
+blueprint FR-CAREER-001 s/d FR-CAREER-005. Tidak ada alur approval/verifikasi untuk roadmap
+karier — sama seperti KPI, blueprint tidak mensyaratkannya. Berbeda dari KPI, blueprint tidak
+pernah menyebut pegawai mengisi/mengubah data roadmap-nya sendiri (hanya "memantau secara
+mandiri") — modul ini murni: HRD/Admin menetapkan posisi/target/persyaratan/progres →
+pegawai dan pimpinan memantau.
+
 ## roadmap_karier
 
-Posisi saat ini.
+Progres jenjang karier per pegawai. Adaptasi dari `career_roadmaps` pada blueprint §17 (nama
+tabel disesuaikan ke konvensi tunggal proyek ini, sama seperti `documents` → `dokumen`,
+`kpis` → `kpi`). Blueprint hanya mendefinisikan satu tabel untuk modul ini — tidak ada tabel
+child/detail seperti `kpi_detail`.
 
-Target jabatan.
+Kolom
 
-Target promosi.
+- id
+- pegawai_id — FK ke `pegawai.id`, `ON DELETE CASCADE`
+- jabatan_saat_ini_id — FK ke `jabatan.id`, `ON DELETE SET NULL`, nullable. Adaptasi dari
+  `current_position` (FR-CAREER-001). `ON DELETE SET NULL` (bukan CASCADE) karena
+  penghapusan data master jabatan tidak boleh ikut menghapus riwayat roadmap pegawai.
+- jabatan_target_id — FK ke `jabatan.id`, `ON DELETE SET NULL`, nullable. Adaptasi dari
+  `target_position` (FR-CAREER-002).
+- persyaratan — TEXT, nullable. **Bukan bagian draft blueprint** — blueprint hanya
+  menyediakan kolom `progress` (numerik) untuk merepresentasikan pemenuhan persyaratan
+  (FR-CAREER-004), tanpa kolom terpisah untuk mendeskripsikan persyaratan itu sendiri
+  (FR-CAREER-003). Kolom teks bebas ini adalah keputusan desain eksplisit, mengikuti pola
+  `catatan_approval` TEXT yang sudah dipakai di modul lain untuk keterangan bebas — bukan
+  skema persyaratan terstruktur, karena blueprint tidak merincikannya.
+- progress — NUMERIC(5,2), default 0. **Bukan** kolom terhitung otomatis (`GENERATED`
+  ataupun dihitung Service layer) — beda dari `kpi.percentage`. Blueprint tidak memberi
+  formula untuk `progress` (tidak ada field `target`/`achievement` yang bisa dibagi seperti
+  KPI, dan tidak ada relasi ke tabel `kpi` di draft blueprint), jadi Admin/HRD menetapkannya
+  langsung. Divalidasi 0–100 di Validation layer (lihat `docs/api.md` §10) — beda dari
+  `kpi.achievement` yang boleh melebihi target, karena "persentase pemenuhan persyaratan"
+  secara semantik tidak bisa melebihi 100%.
+- status — VARCHAR(20), default `'in_progress'`,
+  `CHECK (status IN ('in_progress', 'eligible', 'promoted'))` — persis 3 nilai enum blueprint
+  §21. Tidak ada aturan urutan transisi antar status (mis. tidak boleh mundur) — blueprint
+  tidak menetapkannya, jadi tidak ditegakkan di sini (Admin/HRD bebas mengubah ke nilai enum
+  mana pun).
+- created_at
+- updated_at
+- deleted_at
 
-Deadline.
+Constraint
 
-Status.
+- Tidak ada `UNIQUE` pada `pegawai_id` (atau kombinasi kolom apa pun) — beda dari
+  `kpi`'s `UNIQUE(pegawai_id, period)`. Blueprint tidak punya kolom `period` untuk roadmap
+  karier dan tidak menyatakan "satu pegawai hanya boleh punya satu roadmap aktif", jadi
+  seorang pegawai bisa memiliki lebih dari satu baris `roadmap_karier` (mis. riwayat jenjang
+  karier dari waktu ke waktu). Keputusan desain eksplisit — bukan sesuatu yang belum
+  dikerjakan.
+
+Index
+
+- idx_roadmap_karier_pegawai_id
+- idx_roadmap_karier_status
+- idx_roadmap_karier_jabatan_target_id
+
+Relasi
+
+pegawai
+
+1
+
+↓
+
+N
+
+roadmap_karier
+
+N
+
+↓
+
+1
+
+jabatan (dua kali — jabatan_saat_ini_id dan jabatan_target_id)
 
 ---
 

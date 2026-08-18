@@ -1,0 +1,1 @@
+ALTER TABLE public.roadmap_karier ENABLE ROW LEVEL SECURITY;
