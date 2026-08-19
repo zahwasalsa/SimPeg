@@ -701,15 +701,93 @@ Index
 
 # 16. Sertifikasi
 
+Sesuai `docs/roadmap.md` Phase 9 (dependency: Pegawai — sudah selesai) dan blueprint
+FR-CERT-001 s/d FR-CERT-005. Tidak ada alur approval/verifikasi — blueprint tidak
+mensyaratkannya, sama seperti KPI/Roadmap Karier/Penelitian. Modul ini tidak punya pola
+"admin/HRD menetapkan untuk pegawai" — sertifikasi dilaporkan sendiri oleh pemiliknya
+(FR-CERT-001 berbunyi "Pengguna dapat menambahkan..."), jadi pegawai punya CRUD penuh atas
+datanya sendiri, mirip pola kepemilikan `dokumen`/`penelitian`/`hki`. **Ini keputusan desain
+eksplisit** — blueprint tidak merinci role per-FR untuk modul ini.
+
+## jenis_sertifikasi
+
+Data master jenis/tipe sertifikasi (adaptasi dari `certificate_types` pada blueprint §18
+Data Master). **Direncanakan sejak Phase 2 (Master Data) di `docs/roadmap.md` tapi belum
+pernah dibangun saat itu** — dibuat sekarang karena baru menjadi dependency nyata untuk
+`sertifikasi`. Mengikuti pola persis `kategori_dokumen`.
+
+Kolom
+
+- id
+- nama_jenis — VARCHAR(150), wajib, unik
+- deskripsi — TEXT, nullable
+- created_at
+- updated_at
+- deleted_at
+
+Index: unique constraint pada `nama_jenis` (index otomatis).
+
+---
+
 ## sertifikasi
 
-Data sertifikat.
+Data sertifikasi kompetensi pegawai beserta berkas sertifikat dan tanggal masa berlaku
+(FR-CERT-001/002/003/004). Adaptasi dari `certifications` pada blueprint §18 (nama tabel
+disesuaikan ke konvensi tunggal proyek ini, sama seperti `documents` → `dokumen`).
 
-Tanggal berlaku.
+Kolom
 
-Tanggal berakhir.
+- id
+- pegawai_id — FK ke `pegawai.id`, `ON DELETE CASCADE`. Pemilik sertifikat.
+- jenis_sertifikasi_id — FK ke `jenis_sertifikasi.id`, `ON DELETE SET NULL`, nullable.
+  Mengikuti pola nullable FK yang sama seperti `dokumen.kategori_dokumen_id`.
+- nama_sertifikat — VARCHAR(300), wajib
+- penerbit — VARCHAR(300), nullable (blueprint: issuer)
+- nomor_sertifikat — VARCHAR(150), nullable
+- tanggal_terbit — DATE, nullable (blueprint: issue_date)
+- tanggal_berakhir — DATE, nullable (blueprint: expired_date). Tidak semua sertifikat
+  punya masa berlaku (mis. sertifikat kelulusan) — mengikuti pola
+  `dokumen.tanggal_kedaluwarsa`.
+- nama_file_asli / file_path / bucket / mime_type / ukuran_file — metadata berkas
+  sertifikat, satu berkas per baris (tanpa versioning). Berkas disimpan di Supabase
+  Storage bucket **`sertifikat`** (privat, limit 10MB, mime types sama seperti bucket
+  `documents`).
+- created_at
+- updated_at
+- deleted_at
 
-Reminder.
+**Catatan desain (kolom yang tidak ada di draft blueprint §18):** blueprint's tabel
+`certifications` hanya punya employee_id/certificate_type_id/issuer/issue_date/expired_date
+— tidak ada nama/judul sertifikat, nomor sertifikat, atau kolom berkas sama sekali.
+- `nama_sertifikat` ditambahkan karena tanpa ini, dua sertifikat dengan jenis yang sama
+  (mis. dua "Kompetensi Dosen" di tahun berbeda) tidak bisa dibedakan di riwayat
+  (FR-CERT-004).
+- `nomor_sertifikat` ditambahkan mengikuti pola `hki.nomor_pendaftaran` — identitas resmi
+  yang berguna untuk verifikasi.
+- Kolom berkas ditambahkan karena FR-CERT-002 eksplisit mensyaratkan upload dokumen
+  sertifikat. Sertifikasi punya kolom berkas sendiri (bukan FK ke tabel `dokumen` yang
+  sudah ada) supaya alur "Tambah Sertifikat" tetap satu langkah (create + upload
+  sekaligus, sama seperti `POST /dokumen`), bukan dua langkah terpisah. Berkas wajib
+  diunggah saat membuat data — tidak ada alur "isi metadata dulu, upload nanti".
+- Tidak ada kolom `status` (aktif/kedaluwarsa) tersimpan — blueprint §21 "Nilai Status
+  (Enum) per Tabel" **tidak mencantumkan `certifications` sama sekali** (berbeda dari
+  `kpis`/`career_roadmaps` yang eksplisit didaftar). "Expired" (task di `docs/roadmap.md`
+  Phase 9) ditafsirkan sebagai status turunan dari `tanggal_berakhir < tanggal hari ini`,
+  dihitung saat query/tampil — bukan kolom baru. Persis pola yang sudah dipakai untuk
+  `penelitian` (§15).
+- FR-CERT-003 "pengingat masa berlaku" ditafsirkan sebagai reminder dalam-aplikasi
+  (query filter + banner Dashboard, jendela 30 hari — konstanta yang sama dengan
+  `EXPIRY_REMINDER_DAYS` milik dokumen), **bukan** pengiriman notifikasi keluar
+  (email/WhatsApp) — modul Notifikasi (FR-NOTIF) belum dibangun sama sekali di proyek
+  ini. Persis pola FR-DOC-009 yang sudah ada, diterapkan konsisten, bukan interpretasi
+  baru.
+
+Index
+
+- idx_sertifikasi_pegawai_id
+- idx_sertifikasi_jenis_sertifikasi_id
+- idx_sertifikasi_tanggal_berakhir (partial, `WHERE tanggal_berakhir IS NOT NULL` — sama
+  seperti `idx_dokumen_tanggal_kedaluwarsa`)
 
 ---
 

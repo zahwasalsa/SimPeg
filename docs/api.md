@@ -1846,33 +1846,166 @@ pimpinan), `404` tidak ditemukan, `422` id bukan UUID.
 
 # 12. Sertifikasi
 
-GET
+Diimplementasikan sesuai `docs/roadmap.md` Phase 9 (dependency: Pegawai) dan blueprint
+FR-CERT-001 s/d FR-CERT-005. Path aktual `/sertifikasi` dan `/jenis-sertifikasi` (bukan
+`/certifications`/`/certificate-types` seperti draft blueprint). `jenis_sertifikasi`
+adalah modul standalone berdiri sendiri (mirip `roadmap_karier`), `sertifikasi` adalah
+modul self-service dengan upload berkas (mirip `dokumen`, tanpa versioning/approval).
+Seluruh endpoint memerlukan `Authorization: Bearer <accessToken>`. Role tidak pernah
+dicek di Controller — gate akses ada di `authMiddleware`/`authorize`/`sertifikasi.authorize.js`,
+scope data diputuskan di Service.
 
-/certifications
+**Model permission mengikuti pola self-service Dokumen/Penelitian/HKI** (FR-CERT-001
+berbunyi "Pengguna dapat menambahkan...", bukan "HRD/Admin menetapkan...") — **bukan**
+pola KPI/Roadmap Karier.
+
+**Role**
+
+- **Admin/HRD**: CRUD penuh atas `jenis_sertifikasi` (master) dan seluruh `sertifikasi`
+  milik pegawai mana pun.
+- **Pegawai**: hanya SELECT pada `jenis_sertifikasi`; CRUD penuh (create/read/update/
+  **delete**) atas sertifikasi miliknya sendiri.
+- **Pimpinan**: read-only atas semua data (`GET` selalu unconditional, sama seperti
+  KPI/Penelitian — berbeda dari Dokumen yang membatasi pimpinan hanya ke dokumen
+  miliknya sendiri jika ada).
+
+**Tidak ada alur approval** — FR-CERT tidak pernah mensyaratkannya. **Tidak ada kolom
+status tersimpan** — "Expired" dihitung langsung dari `tanggalBerakhir < hari ini`
+(lihat `docs/database.md` §16).
 
 ---
 
-GET
+## GET /jenis-sertifikasi
 
-/certifications/{id}
+Query params: `page`, `limit`, `search` (mencari `namaJenis`, case-insensitive).
 
----
-
-POST
-
-/certifications
+Terbuka untuk semua role terautentikasi. Response 200 — format pagination standar.
+Error: `401` tanpa token.
 
 ---
 
-PUT
+## GET /jenis-sertifikasi/{id}
 
-/certifications/{id}
+Terbuka untuk semua role. Error: `401`, `404` tidak ditemukan, `422` id bukan UUID.
 
 ---
 
-DELETE
+## POST /jenis-sertifikasi
 
-/certifications/{id}
+**Admin/HRD only.** Body:
+
+```json
+{ "namaJenis": "Kompetensi Dosen", "deskripsi": "Sertifikasi kompetensi pengajaran" }
+```
+
+`namaJenis` wajib dan unik; `deskripsi` opsional. Response `201`.
+
+Error: `401`, `403` bukan admin/hrd, `409` nama sudah terdaftar, `422` field tidak valid.
+
+---
+
+## PATCH /jenis-sertifikasi/{id}
+
+**Admin/HRD only.** Seluruh field opsional — hanya yang dikirim yang diperbarui.
+
+Response 200. Error: `401`, `403` bukan admin/hrd, `404` tidak ditemukan, `409` nama
+sudah terdaftar, `422` field tidak valid.
+
+---
+
+## DELETE /jenis-sertifikasi/{id}
+
+**Admin/HRD only.** Soft delete; ditolak `409` selama masih direferensikan oleh baris
+`sertifikasi` mana pun (mengikuti pola `kategori_dokumen`).
+
+Response 200 — `data: null`. Error: `401`, `403` bukan admin/hrd, `404` tidak ditemukan,
+`409` masih digunakan, `422` id bukan UUID.
+
+---
+
+## GET /sertifikasi
+
+Query params: `page`, `limit`, `pegawaiId` (UUID, hanya efektif untuk admin/hrd/pimpinan),
+`jenisSertifikasiId` (UUID), `akanBerakhir` (boolean — FR-CERT-003, jendela 30 hari sama
+seperti `akanKedaluwarsa` milik dokumen), `kedaluwarsa` (boolean — hanya baris yang
+`tanggalBerakhir`-nya sudah lewat, untuk kebutuhan "Expired").
+
+- **Admin/HRD/Pimpinan**: melihat seluruh data, filter opsional.
+- **Pegawai**: `pegawaiId` di query diabaikan — selalu di-scope ke miliknya sendiri.
+
+Response 200 — format pagination standar. Error: `401` tanpa token.
+
+---
+
+## GET /sertifikasi/{id}
+
+**Admin/HRD/Pimpinan** bisa lihat siapa pun. **Pegawai** hanya miliknya sendiri
+(`sertifikasi.pegawai_id` dicocokkan ke pegawai milik `req.user.id`).
+
+Error: `401`, `403` bukan admin/hrd/pimpinan dan bukan pemilik, `404` tidak ditemukan,
+`422` id bukan UUID.
+
+---
+
+## GET /sertifikasi/{id}/download
+
+Signed URL ke berkas sertifikat (privat, kedaluwarsa 60 detik) — `?download=1` memicu
+`Content-Disposition: attachment`, tanpa parameter menghasilkan tautan inline-viewable.
+Akses sama seperti `GET /sertifikasi/{id}`.
+
+Response 200
+
+```json
+{ "success": true, "message": "Tautan berkas sertifikasi", "data": { "url": "...", "expiresIn": 60 } }
+```
+
+Error: sama seperti `GET /sertifikasi/{id}`, plus `502` gagal membuat tautan.
+
+---
+
+## POST /sertifikasi
+
+FR-CERT-001/002. Self-service, satu langkah (create + upload berkas sekaligus,
+`multipart/form-data`).
+
+- **Admin/HRD**: `pegawaiId` wajib dikirim.
+- **Pegawai**: `pegawaiId` tidak boleh dikirim (`422` jika dikirim) — pemilik selalu
+  otomatis diri sendiri.
+- **Pimpinan**: `403`.
+
+Field: `pegawaiId` (kondisional), `jenisSertifikasiId` (opsional), `namaSertifikat`
+(wajib), `penerbit`/`nomorSertifikat`/`tanggalTerbit`/`tanggalBerakhir` (opsional), `file`
+(**wajib** — pdf/jpeg/png/doc/docx, maksimal 10MB).
+
+Response `201`.
+
+Error: `401`, `403` pimpinan atau pegawaiId dikirim oleh pegawai, `404` `pegawaiId`
+(admin/hrd) atau `jenisSertifikasiId` tidak ditemukan, `422` field tidak valid, berkas
+tidak dilampirkan, tipe berkas tidak didukung, atau ukuran berkas melebihi batas.
+
+---
+
+## PATCH /sertifikasi/{id}
+
+Metadata only — **tidak ada penggantian berkas** di endpoint ini (FR-CERT tidak pernah
+menyebut re-upload/versi; untuk mengganti berkas, buat data sertifikasi baru). **Admin/HRD**
+unconditional; **pegawai** hanya miliknya sendiri (full CRUD). **Pimpinan**: `403`.
+`pegawaiId` tidak boleh diubah (`422` jika dikirim).
+
+Response 200 — objek sertifikasi terkini. Error: `401`, `403` bukan admin/hrd dan bukan
+pemilik (termasuk pimpinan), `404` tidak ditemukan atau `jenisSertifikasiId` tidak
+ditemukan, `422` field tidak valid atau `pegawaiId` dikirim.
+
+---
+
+## DELETE /sertifikasi/{id}
+
+Soft delete; berkas di Storage sengaja ditinggalkan (recoverable), mengikuti pola
+`dokumen`. **Admin/HRD** unconditional; **pegawai** boleh menghapus sertifikasi miliknya
+sendiri. **Pimpinan**: `403`.
+
+Response 200 — `data: null`. Error: `401`, `403` bukan admin/hrd dan bukan pemilik
+(termasuk pimpinan), `404` tidak ditemukan, `422` id bukan UUID.
 
 ---
 

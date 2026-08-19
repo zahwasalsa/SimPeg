@@ -1,0 +1,2 @@
+ALTER TABLE public.jenis_sertifikasi ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sertifikasi ENABLE ROW LEVEL SECURITY;

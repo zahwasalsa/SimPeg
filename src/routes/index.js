@@ -12,6 +12,8 @@ const kpiRoutes = require("../modules/kpi/kpi.routes");
 const roadmapKarierRoutes = require("../modules/roadmapKarier/roadmapKarier.routes");
 const penelitianRoutes = require("../modules/penelitian/penelitian.routes");
 const hkiRoutes = require("../modules/hki/hki.routes");
+const jenisSertifikasiRoutes = require("../modules/jenisSertifikasi/jenisSertifikasi.routes");
+const sertifikasiRoutes = require("../modules/sertifikasi/sertifikasi.routes");
 
 const router = Router();
 
@@ -28,5 +30,7 @@ router.use("/kpi", kpiRoutes);
 router.use("/roadmap-karier", roadmapKarierRoutes);
 router.use("/penelitian", penelitianRoutes);
 router.use("/hki", hkiRoutes);
+router.use("/jenis-sertifikasi", jenisSertifikasiRoutes);
+router.use("/sertifikasi", sertifikasiRoutes);
 
 module.exports = router;
