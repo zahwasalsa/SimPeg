@@ -2189,14 +2189,23 @@ Diimplementasikan pada Phase 2 (Role & User Management). Seluruh endpoint memerl
 `Authorization: Bearer <accessToken>` (`authMiddleware`) dan diproteksi `authorize`/`authorizeSelfOrRoles`
 middleware — role tidak pernah dicek langsung di Controller.
 
-Tidak ada endpoint `POST /users` (pembuatan akun hanya lewat `/auth/register`, selalu role `pegawai`) dan
-tidak ada endpoint `DELETE /users/{id}` (admin tidak diperbolehkan menghapus akun secara sembarangan —
-gunakan `PATCH /users/{id}/status` untuk menonaktifkan).
+Tidak ada endpoint `POST /users` (pembuatan akun hanya lewat `/auth/register`, selalu role `pegawai`).
 
 Response tidak pernah menyertakan `password_hash`, access token, refresh token, atau secret apa pun.
 
-Modul CRUD untuk tabel `pegawai` (dikelola HRD) **belum diimplementasikan** — direncanakan pada phase
-terpisah.
+**Email dan password ditangani lewat Supabase Auth, bukan `public.users`.** `email` tersimpan di dua
+tempat — `auth.users.email` (yang benar-benar dicek saat login) dan `public.users.email` (kolom mirror
+yang dibaca semua endpoint lain) — hanya disinkronkan sekali saat akun dibuat lewat trigger
+`on_auth_user_created` (**hanya saat INSERT, tidak pernah saat UPDATE**). `PATCH /users/{id}/email`
+menulis keduanya secara eksplisit dalam satu request, dengan rollback otomatis pada `auth.users` bila
+penulisan ke `public.users` gagal setelah sisi Auth sudah berhasil, supaya keduanya tidak pernah
+berbeda. `password_hash` pada `public.users` sudah legacy/tidak dipakai — Supabase Auth memegang
+seluruhnya lewat `auth.users.encrypted_password`; `PATCH /users/{id}/password` hanya menulis ke Auth.
+
+`GET /users/{id}` menyertakan `pegawai: { id, namaLengkap } | null` — profil pegawai yang terhubung
+lewat `pegawai.user_id`, dipakai oleh form Edit di halaman Manajemen User untuk menampilkan/mengubah
+nama (yang sebenarnya tersimpan di `pegawai.nama_lengkap`, bukan di `users` sama sekali). `null` berarti
+akun ini belum punya profil pegawai — registrasi mandiri hanya membuat baris `users`, bukan `pegawai`.
 
 ---
 
@@ -2234,12 +2243,69 @@ Response 200
 {
   "success": true,
   "message": "Detail user",
-  "data": { "id": "uuid", "email": "...", "role": "pegawai", "isActive": true, "lastLogin": "...", "createdAt": "...", "updatedAt": "..." }
+  "data": {
+    "id": "uuid",
+    "email": "...",
+    "role": "pegawai",
+    "isActive": true,
+    "lastLogin": "...",
+    "createdAt": "...",
+    "updatedAt": "...",
+    "pegawai": { "id": "uuid", "namaLengkap": "..." }
+  }
 }
 ```
 
+`pegawai` bernilai `null` bila akun ini belum punya profil pegawai yang terhubung.
+
 Error: `401` tanpa token, `403` bukan admin dan bukan `{id}` milik sendiri, `404` tidak ditemukan,
 `422` `{id}` bukan UUID valid
+
+---
+
+## PATCH /users/{id}/email
+
+Mengubah email login. **Admin only.** Menulis `auth.users.email` (dicek saat login) dan
+`public.users.email` (kolom mirror) sekaligus — lihat catatan sinkronisasi di awal Bagian 19. Untuk
+mengubah nama, pakai `PATCH /pegawai/{id}` yang sudah ada (lewat `pegawai.id` dari
+`GET /users/{id}`'s `pegawai.id`), bukan endpoint ini.
+
+Request body
+
+```json
+{ "email": "user.baru@example.com" }
+```
+
+Response 200 — objek user (format sama seperti `GET /users/{id}`, termasuk `pegawai`)
+
+Error: `401`, `403` bukan admin, `404` tidak ditemukan, `409` email sudah dipakai akun lain
+(dicek proaktif terhadap `public.users` sebelum memanggil Supabase Auth — respons duplikat mentah dari
+Auth API tidak bisa diandalkan untuk dijadikan `409`, lihat komentar `users.service.js#changeEmail`),
+`422` email tidak valid / id bukan UUID
+
+---
+
+## PATCH /users/{id}/password
+
+Mengatur ulang password login. **Admin only.** Hanya menulis ke Supabase Auth
+(`auth.users.encrypted_password`) — tidak ada apa pun yang ditulis ke `public.users`.
+
+Request body
+
+```json
+{ "password": "PasswordBaru123" }
+```
+
+`password` minimal 8 karakter (kebijakan sama seperti `POST /auth/register`).
+
+Response 200
+
+```json
+{ "success": true, "message": "Password berhasil diubah", "data": null }
+```
+
+Error: `401`, `403` bukan admin, `404` tidak ditemukan, `422` password kurang dari 8 karakter / id
+bukan UUID
 
 ---
 

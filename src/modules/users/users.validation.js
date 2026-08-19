@@ -7,6 +7,19 @@ const listValidation = [
 
 const idParamValidation = [param("id").isUUID().withMessage("ID tidak valid")];
 
+const emailValidation = [
+  param("id").isUUID().withMessage("ID tidak valid"),
+  body("email").isEmail().withMessage("Email tidak valid").normalizeEmail(),
+];
+
+// Kebijakan sama seperti auth.validation.js#registerValidation — minimal 8
+// karakter, tidak ada aturan kompleksitas tambahan (Supabase Auth tidak
+// mensyaratkan lebih dari itu di proyek ini).
+const passwordValidation = [
+  param("id").isUUID().withMessage("ID tidak valid"),
+  body("password").isString().isLength({ min: 8 }).withMessage("Password minimal 8 karakter"),
+];
+
 const roleValidation = [
   param("id").isUUID().withMessage("ID tidak valid"),
   body("role").isIn(["admin", "hrd", "pegawai", "pimpinan"]).withMessage("Role tidak valid"),
@@ -17,4 +30,11 @@ const statusValidation = [
   body("isActive").isBoolean().withMessage("isActive harus boolean").toBoolean(),
 ];
 
-module.exports = { listValidation, idParamValidation, roleValidation, statusValidation };
+module.exports = {
+  listValidation,
+  idParamValidation,
+  emailValidation,
+  passwordValidation,
+  roleValidation,
+  statusValidation,
+};

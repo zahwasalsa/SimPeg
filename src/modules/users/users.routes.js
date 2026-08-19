@@ -20,6 +20,21 @@ router.get(
   controller.detail,
 );
 
+// Admin only. Writes auth.users.email (source of truth for login) and
+// public.users.email together — see users.service.js#changeEmail for the
+// sync/rollback behavior between the two.
+router.patch("/:id/email", authorize("admin"), validation.emailValidation, validate, controller.changeEmail);
+
+// Admin only. Sets the account's login password directly via Supabase Auth
+// — never touches public.users (password_hash is unused/legacy there).
+router.patch(
+  "/:id/password",
+  authorize("admin"),
+  validation.passwordValidation,
+  validate,
+  controller.changePassword,
+);
+
 router.patch("/:id/role", authorize("admin"), validation.roleValidation, validate, controller.changeRole);
 
 router.patch(

@@ -11,7 +11,11 @@ const accounts = {
   hrd: { email: `qa-users-test-hrd-${runId}@example.test`, password: "Passw0rd123" },
   pegawai: { email: `qa-users-test-pegawai-${runId}@example.test`, password: "Passw0rd123" },
   pimpinan: { email: `qa-users-test-pimpinan-${runId}@example.test`, password: "Passw0rd123" },
+  emailTarget: { email: `qa-users-test-emailtarget-${runId}@example.test`, password: "Passw0rd123" },
 };
+
+let emailTargetPegawaiId;
+const emailTargetNama = `QA Users EmailTarget ${runId}`;
 
 const createTestAccount = async (email, password, role) => {
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -38,6 +42,18 @@ const createTestAccount = async (email, password, role) => {
   return { id: data.user.id, token: loginRes.body.data.session.accessToken };
 };
 
+const createPegawaiProfile = async (userId, nip, namaLengkap) => {
+  const { data, error } = await supabaseAdmin
+    .from("pegawai")
+    .insert({ user_id: userId, nip, nama_lengkap: namaLengkap })
+    .select("id")
+    .single();
+  if (error) {
+    throw error;
+  }
+  return data.id;
+};
+
 before(async () => {
   accounts.admin = {
     ...accounts.admin,
@@ -55,9 +71,19 @@ before(async () => {
     ...accounts.pimpinan,
     ...(await createTestAccount(accounts.pimpinan.email, accounts.pimpinan.password, "pimpinan")),
   };
+  accounts.emailTarget = {
+    ...accounts.emailTarget,
+    ...(await createTestAccount(accounts.emailTarget.email, accounts.emailTarget.password, "pegawai")),
+  };
+  emailTargetPegawaiId = await createPegawaiProfile(
+    accounts.emailTarget.id,
+    `USR-EMAIL-${runId}`,
+    emailTargetNama,
+  );
 });
 
 after(async () => {
+  await supabaseAdmin.from("pegawai").delete().eq("id", emailTargetPegawaiId);
   // Deleting the auth.users row cascades to public.users (migration 018).
   await Promise.all(
     Object.values(accounts)
@@ -128,6 +154,142 @@ test("GET /users/:id - non-existent user returns 404", async () => {
   const res = await request(app)
     .get("/api/v1/users/00000000-0000-0000-0000-000000000000")
     .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 404);
+});
+
+// --- GET /api/v1/users/:id - linked pegawai ---
+
+test("GET /users/:id - includes linked pegawai {id, namaLengkap} when a profile exists", async () => {
+  const res = await request(app)
+    .get(`/api/v1/users/${accounts.emailTarget.id}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.pegawai.id, emailTargetPegawaiId);
+  assert.equal(res.body.data.pegawai.namaLengkap, emailTargetNama);
+});
+
+test("GET /users/:id - pegawai is null when no profile is linked", async () => {
+  const res = await request(app)
+    .get(`/api/v1/users/${accounts.admin.id}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.pegawai, null);
+});
+
+// --- PATCH /api/v1/users/:id/email ---
+
+const newEmail = `qa-users-test-emailtarget-new-${runId}@example.test`;
+
+test("PATCH /users/:id/email - hrd/pegawai/pimpinan cannot change email (403)", async () => {
+  for (const role of ["hrd", "pegawai", "pimpinan"]) {
+    const res = await request(app)
+      .patch(`/api/v1/users/${accounts.emailTarget.id}/email`)
+      .set("Authorization", `Bearer ${accounts[role].token}`)
+      .send({ email: newEmail });
+    assert.equal(res.status, 403, `expected 403 for role ${role}`);
+  }
+});
+
+test("PATCH /users/:id/email - rejects invalid email (422)", async () => {
+  const res = await request(app)
+    .patch(`/api/v1/users/${accounts.emailTarget.id}/email`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`)
+    .send({ email: "not-an-email" });
+  assert.equal(res.status, 422);
+});
+
+test("PATCH /users/:id/email - changing to an email already used by another account is rejected (409)", async () => {
+  const res = await request(app)
+    .patch(`/api/v1/users/${accounts.emailTarget.id}/email`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`)
+    .send({ email: accounts.admin.email });
+  assert.equal(res.status, 409);
+});
+
+test("PATCH /users/:id/email - admin changes the email, updating both auth.users and public.users together", async () => {
+  const res = await request(app)
+    .patch(`/api/v1/users/${accounts.emailTarget.id}/email`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`)
+    .send({ email: newEmail });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.email, newEmail);
+
+  // public.users.email reflects the change immediately.
+  const detailRes = await request(app)
+    .get(`/api/v1/users/${accounts.emailTarget.id}`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`);
+  assert.equal(detailRes.body.data.email, newEmail);
+
+  // auth.users.email actually changed too — login only works with the new
+  // address, proving the two columns never drifted out of sync.
+  const loginOld = await request(app)
+    .post("/api/v1/auth/login")
+    .send({ email: accounts.emailTarget.email, password: accounts.emailTarget.password });
+  assert.equal(loginOld.status, 401);
+
+  const loginNew = await request(app)
+    .post("/api/v1/auth/login")
+    .send({ email: newEmail, password: accounts.emailTarget.password });
+  assert.equal(loginNew.status, 200);
+
+  accounts.emailTarget.email = newEmail;
+});
+
+test("PATCH /users/:id/email - non-existent id returns 404", async () => {
+  const res = await request(app)
+    .patch("/api/v1/users/00000000-0000-0000-0000-000000000000/email")
+    .set("Authorization", `Bearer ${accounts.admin.token}`)
+    .send({ email: `qa-ghost-${runId}@example.test` });
+  assert.equal(res.status, 404);
+});
+
+// --- PATCH /api/v1/users/:id/password ---
+
+test("PATCH /users/:id/password - hrd/pegawai/pimpinan cannot change password (403)", async () => {
+  for (const role of ["hrd", "pegawai", "pimpinan"]) {
+    const res = await request(app)
+      .patch(`/api/v1/users/${accounts.emailTarget.id}/password`)
+      .set("Authorization", `Bearer ${accounts[role].token}`)
+      .send({ password: "NewPassw0rd123" });
+    assert.equal(res.status, 403, `expected 403 for role ${role}`);
+  }
+});
+
+test("PATCH /users/:id/password - rejects password shorter than 8 characters (422)", async () => {
+  const res = await request(app)
+    .patch(`/api/v1/users/${accounts.emailTarget.id}/password`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`)
+    .send({ password: "short" });
+  assert.equal(res.status, 422);
+});
+
+test("PATCH /users/:id/password - admin sets a new password; old password stops working, new one logs in", async () => {
+  const newPassword = "NewPassw0rd123";
+  const res = await request(app)
+    .patch(`/api/v1/users/${accounts.emailTarget.id}/password`)
+    .set("Authorization", `Bearer ${accounts.admin.token}`)
+    .send({ password: newPassword });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data, null);
+
+  const loginOld = await request(app)
+    .post("/api/v1/auth/login")
+    .send({ email: accounts.emailTarget.email, password: accounts.emailTarget.password });
+  assert.equal(loginOld.status, 401);
+
+  const loginNew = await request(app)
+    .post("/api/v1/auth/login")
+    .send({ email: accounts.emailTarget.email, password: newPassword });
+  assert.equal(loginNew.status, 200);
+
+  accounts.emailTarget.password = newPassword;
+});
+
+test("PATCH /users/:id/password - non-existent id returns 404", async () => {
+  const res = await request(app)
+    .patch("/api/v1/users/00000000-0000-0000-0000-000000000000/password")
+    .set("Authorization", `Bearer ${accounts.admin.token}`)
+    .send({ password: "SomePassw0rd" });
   assert.equal(res.status, 404);
 });
 

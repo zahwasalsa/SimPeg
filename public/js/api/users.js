@@ -7,6 +7,12 @@ export const listUsers = ({ page = 1, limit = 10 } = {}) => {
 
 export const getUser = (id) => apiFetch(`/users/${id}`);
 
+export const updateUserEmail = (id, payload) =>
+  apiFetch(`/users/${id}/email`, { method: "PATCH", body: payload });
+
+export const updateUserPassword = (id, payload) =>
+  apiFetch(`/users/${id}/password`, { method: "PATCH", body: payload });
+
 export const updateUserRole = (id, payload) =>
   apiFetch(`/users/${id}/role`, { method: "PATCH", body: payload });
 

@@ -27,6 +27,32 @@ const detail = async (req, res, next) => {
   }
 };
 
+const changeEmail = async (req, res, next) => {
+  try {
+    const user = await usersService.changeEmail({
+      targetId: req.params.id,
+      email: req.body.email,
+      actorId: req.user.id,
+    });
+    responseHelper.success(res, { message: "Email berhasil diubah", data: user });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const changePassword = async (req, res, next) => {
+  try {
+    await usersService.changePassword({
+      targetId: req.params.id,
+      password: req.body.password,
+      actorId: req.user.id,
+    });
+    responseHelper.success(res, { message: "Password berhasil diubah", data: null });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const changeRole = async (req, res, next) => {
   try {
     const user = await usersService.changeRole({
@@ -62,4 +88,4 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { list, detail, changeRole, changeStatus, remove };
+module.exports = { list, detail, changeEmail, changePassword, changeRole, changeStatus, remove };

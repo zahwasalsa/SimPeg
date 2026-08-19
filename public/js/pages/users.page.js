@@ -6,7 +6,16 @@ import { openFormModal } from "../components/modalForm.js";
 import { renderStatusBadge } from "../components/statusBadge.js";
 import { showToast } from "../components/toast.js";
 import { escapeHtml, formatDate, formatDateTime } from "../utils/format.js";
-import { listUsers, getUser, updateUserRole, updateUserStatus, deleteUser } from "../api/users.js";
+import {
+  listUsers,
+  getUser,
+  updateUserEmail,
+  updateUserPassword,
+  updateUserRole,
+  updateUserStatus,
+  deleteUser,
+} from "../api/users.js";
+import { updatePegawai } from "../api/pegawai.js";
 
 const ADMIN_ONLY = ["admin"];
 
@@ -118,6 +127,7 @@ const openDetailModal = async (id) => {
     document.getElementById("user-detail-body").innerHTML = `
       <dl class="row mb-0">
         ${detailRow("Email", escapeHtml(u.email))}
+        ${detailRow("Nama Lengkap", u.pegawai ? escapeHtml(u.pegawai.namaLengkap) : "-")}
         ${detailRow("Role", escapeHtml(ROLE_LABELS[u.role] || u.role))}
         ${detailRow("Status", renderStatusBadge(u.isActive ? "aktif" : "nonaktif", STATUS_VARIANTS))}
         ${detailRow("Dibuat", formatDateTime(u.createdAt))}
@@ -131,53 +141,107 @@ const openDetailModal = async (id) => {
   }
 };
 
-// Satu form gabungan untuk role + status, menggantikan dua tombol/modal
-// terpisah yang ada sebelumnya ("Ubah Role" / "Ubah Status") — backend tetap
-// dua endpoint terpisah (PATCH /users/:id/role dan /:id/status, tidak ada
-// endpoint update gabungan), jadi onSubmit hanya memanggil endpoint yang
-// nilainya benar-benar berubah, bukan selalu memanggil keduanya.
+// Satu form gabungan untuk email, nama (lewat profil pegawai terkait), role,
+// status, dan password — menggantikan tombol "Ubah Role"/"Ubah Status" yang
+// terpisah sebelumnya. Backend tetap beberapa endpoint granular terpisah
+// (PATCH /users/:id/email, /password, /role, /status, plus PATCH
+// /pegawai/:id yang sudah ada untuk nama — tidak ada endpoint update
+// gabungan baru), jadi onSubmit hanya memanggil endpoint yang nilainya
+// benar-benar berubah.
+//
+// Email sengaja tidak dianggap "milik" modul ini — mengubahnya menulis ke
+// auth.users (sumber kebenaran untuk login) DAN public.users sekaligus di
+// backend (lihat users.service.js#changeEmail), supaya keduanya tidak
+// pernah berbeda. Nama tersimpan di pegawai.nama_lengkap, bukan di users
+// sama sekali, jadi field ini hanya muncul kalau akun sudah punya profil
+// pegawai (tidak setiap user punya satu — registrasi hanya membuat baris
+// users, bukan pegawai).
 const openEditModal = async (id) => {
   try {
     const res = await getUser(id);
     const u = res.data;
     const selfNote = isSelf(id) ? " Ini adalah akun Anda sendiri." : "";
 
+    const fields = [
+      {
+        name: "email",
+        label: "Email",
+        type: "email",
+        required: true,
+        value: u.email,
+        helpText: u.pegawai
+          ? undefined
+          : "Akun ini belum memiliki profil pegawai — nama tidak dapat diedit di sini.",
+      },
+    ];
+
+    if (u.pegawai) {
+      fields.push({
+        name: "namaLengkap",
+        label: "Nama Lengkap",
+        required: true,
+        value: u.pegawai.namaLengkap,
+      });
+    }
+
+    fields.push(
+      {
+        name: "role",
+        label: "Role",
+        type: "select",
+        required: true,
+        value: u.role,
+        options: ROLE_OPTIONS,
+        helpText: `Role saat ini: ${ROLE_LABELS[u.role] || u.role}.${selfNote}`,
+      },
+      {
+        name: "isActive",
+        label: "Status",
+        type: "select",
+        required: true,
+        value: String(u.isActive),
+        options: [
+          { value: "true", label: "Aktif" },
+          { value: "false", label: "Nonaktif" },
+        ],
+        helpText: isSelf(id)
+          ? "Peringatan: menonaktifkan akun sendiri akan langsung mengunci Anda dari sesi saat ini."
+          : undefined,
+      },
+      {
+        name: "password",
+        label: "Password Baru",
+        type: "password",
+        helpText: "Opsional — kosongkan jika tidak ingin mengubah password. Minimal 8 karakter.",
+      },
+    );
+
     openFormModal({
       title: `Edit User - ${u.email}`,
       submitLabel: "Simpan",
-      fields: [
-        {
-          name: "role",
-          label: "Role",
-          type: "select",
-          required: true,
-          value: u.role,
-          options: ROLE_OPTIONS,
-          helpText: `Role saat ini: ${ROLE_LABELS[u.role] || u.role}.${selfNote}`,
-        },
-        {
-          name: "isActive",
-          label: "Status",
-          type: "select",
-          required: true,
-          value: String(u.isActive),
-          options: [
-            { value: "true", label: "Aktif" },
-            { value: "false", label: "Nonaktif" },
-          ],
-          helpText: isSelf(id)
-            ? "Peringatan: menonaktifkan akun sendiri akan langsung mengunci Anda dari sesi saat ini."
-            : undefined,
-        },
-      ],
+      fields,
       onSubmit: async (values) => {
+        if (values.password && values.password.length < 8) {
+          throw new Error("Password baru minimal 8 karakter");
+        }
+
         const nextIsActive = values.isActive === "true";
         const tasks = [];
+
+        if (values.email !== u.email) {
+          tasks.push(updateUserEmail(id, { email: values.email }));
+        }
+        if (u.pegawai && values.namaLengkap !== u.pegawai.namaLengkap) {
+          tasks.push(updatePegawai(u.pegawai.id, { namaLengkap: values.namaLengkap }));
+        }
         if (values.role !== u.role) {
           tasks.push(updateUserRole(id, { role: values.role }));
         }
         if (nextIsActive !== u.isActive) {
           tasks.push(updateUserStatus(id, { isActive: nextIsActive }));
+        }
+        if (values.password) {
+          tasks.push(updateUserPassword(id, { password: values.password }));
         }
 
         if (tasks.length === 0) {
