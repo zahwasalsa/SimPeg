@@ -50,8 +50,7 @@ const columns = () => [
     label: "",
     render: (row) => `
       <button class="btn btn-sm btn-outline-secondary me-1" data-action="detail" data-id="${row.id}" type="button">Detail</button>
-      <button class="btn btn-sm btn-outline-primary me-1" data-action="role" data-id="${row.id}" type="button">Ubah Role</button>
-      <button class="btn btn-sm btn-outline-dark me-1" data-action="status" data-id="${row.id}" type="button">Ubah Status</button>
+      <button class="btn btn-sm btn-outline-primary me-1" data-action="edit" data-id="${row.id}" type="button">Edit</button>
       ${
         isSelf(row.id)
           ? ""
@@ -132,107 +131,65 @@ const openDetailModal = async (id) => {
   }
 };
 
-const openRoleModal = async (id) => {
+// Satu form gabungan untuk role + status, menggantikan dua tombol/modal
+// terpisah yang ada sebelumnya ("Ubah Role" / "Ubah Status") — backend tetap
+// dua endpoint terpisah (PATCH /users/:id/role dan /:id/status, tidak ada
+// endpoint update gabungan), jadi onSubmit hanya memanggil endpoint yang
+// nilainya benar-benar berubah, bukan selalu memanggil keduanya.
+const openEditModal = async (id) => {
   try {
     const res = await getUser(id);
     const u = res.data;
-    const selfWarning = isSelf(id)
-      ? " Peringatan: ini adalah akun Anda sendiri — backend tidak mencegah Anda mengubah role akun sendiri."
-      : "";
+    const selfNote = isSelf(id) ? " Ini adalah akun Anda sendiri." : "";
 
     openFormModal({
-      title: `Ubah Role - ${u.email}`,
-      submitLabel: "Ubah Role",
+      title: `Edit User - ${u.email}`,
+      submitLabel: "Simpan",
       fields: [
         {
           name: "role",
-          label: "Role Baru",
+          label: "Role",
           type: "select",
           required: true,
           value: u.role,
           options: ROLE_OPTIONS,
-          helpText: `Role saat ini: ${ROLE_LABELS[u.role] || u.role}.${selfWarning}`,
+          helpText: `Role saat ini: ${ROLE_LABELS[u.role] || u.role}.${selfNote}`,
+        },
+        {
+          name: "isActive",
+          label: "Status",
+          type: "select",
+          required: true,
+          value: String(u.isActive),
+          options: [
+            { value: "true", label: "Aktif" },
+            { value: "false", label: "Nonaktif" },
+          ],
+          helpText: isSelf(id)
+            ? "Peringatan: menonaktifkan akun sendiri akan langsung mengunci Anda dari sesi saat ini."
+            : undefined,
         },
       ],
       onSubmit: async (values) => {
-        await updateUserRole(id, { role: values.role });
-        showToast("Role user berhasil diubah", "success");
+        const nextIsActive = values.isActive === "true";
+        const tasks = [];
+        if (values.role !== u.role) {
+          tasks.push(updateUserRole(id, { role: values.role }));
+        }
+        if (nextIsActive !== u.isActive) {
+          tasks.push(updateUserStatus(id, { isActive: nextIsActive }));
+        }
+
+        if (tasks.length === 0) {
+          showToast("Tidak ada perubahan untuk disimpan", "info");
+          return;
+        }
+
+        await Promise.all(tasks);
+        showToast("User berhasil diperbarui", "success");
         await load();
       },
     });
-  } catch (err) {
-    showToast(err.message || "Gagal memuat data user", "danger");
-  }
-};
-
-let statusModalEl = null;
-let statusModalTarget = null;
-
-const buildStatusModal = () => {
-  const el = document.createElement("div");
-  el.id = "user-status-modal";
-  el.className = "modal fade";
-  el.tabIndex = -1;
-  el.setAttribute("aria-hidden", "true");
-  el.innerHTML = `
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Ubah Status User</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
-        </div>
-        <div class="modal-body" id="user-status-body"></div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-          <button type="button" class="btn btn-primary" id="user-status-confirm-btn">Ya, Ubah Status</button>
-        </div>
-      </div>
-    </div>`;
-  document.body.appendChild(el);
-
-  document.getElementById("user-status-confirm-btn").addEventListener("click", async () => {
-    if (!statusModalTarget) {
-      return;
-    }
-    const { id, nextIsActive } = statusModalTarget;
-    const btn = document.getElementById("user-status-confirm-btn");
-    btn.disabled = true;
-    try {
-      await updateUserStatus(id, { isActive: nextIsActive });
-      showToast("Status user berhasil diubah", "success");
-      window.bootstrap.Modal.getOrCreateInstance(el).hide();
-      await load();
-    } catch (err) {
-      showToast(err.message || "Gagal mengubah status user", "danger");
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
-  return el;
-};
-
-const openStatusModal = async (id) => {
-  try {
-    const res = await getUser(id);
-    const u = res.data;
-    const nextIsActive = !u.isActive;
-    const el = statusModalEl || (statusModalEl = buildStatusModal());
-    statusModalTarget = { id, nextIsActive };
-
-    const selfWarning = isSelf(id)
-      ? `<div class="alert alert-warning">Ini adalah akun Anda sendiri. Jika Anda menonaktifkan akun ini, Anda akan langsung terkunci dari sesi Anda saat ini.</div>`
-      : "";
-
-    document.getElementById("user-status-body").innerHTML = `
-      ${selfWarning}
-      <p class="mb-0">
-        Ubah status <strong>${escapeHtml(u.email)}</strong> dari
-        ${renderStatusBadge(u.isActive ? "aktif" : "nonaktif", STATUS_VARIANTS)} menjadi
-        ${renderStatusBadge(nextIsActive ? "aktif" : "nonaktif", STATUS_VARIANTS)}?
-      </p>`;
-
-    window.bootstrap.Modal.getOrCreateInstance(el).show();
   } catch (err) {
     showToast(err.message || "Gagal memuat data user", "danger");
   }
@@ -270,10 +227,8 @@ const init = async () => {
     const { action, id } = btn.dataset;
     if (action === "detail") {
       openDetailModal(id);
-    } else if (action === "role") {
-      openRoleModal(id);
-    } else if (action === "status") {
-      openStatusModal(id);
+    } else if (action === "edit") {
+      openEditModal(id);
     } else if (action === "delete") {
       handleDelete(id, btn.dataset.email);
     }
