@@ -8,11 +8,13 @@ const form = document.getElementById("login-form");
 const submitBtn = document.getElementById("login-submit");
 const passwordInput = document.getElementById("password");
 const togglePasswordBtn = document.getElementById("toggle-password");
+const togglePasswordIcon = document.getElementById("toggle-password-icon");
 
 togglePasswordBtn.addEventListener("click", () => {
   const isHidden = passwordInput.type === "password";
   passwordInput.type = isHidden ? "text" : "password";
-  togglePasswordBtn.textContent = isHidden ? "Sembunyikan" : "Tampilkan";
+  togglePasswordIcon.classList.toggle("bi-eye", !isHidden);
+  togglePasswordIcon.classList.toggle("bi-eye-slash", isHidden);
   togglePasswordBtn.setAttribute("aria-label", isHidden ? "Sembunyikan password" : "Tampilkan password");
   togglePasswordBtn.setAttribute("aria-pressed", String(isHidden));
 });

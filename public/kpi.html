@@ -10,38 +10,47 @@
   <body>
     <div id="app-navbar"></div>
     <main class="container py-4">
-      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-        <h1 class="h3 mb-0">KPI</h1>
+      <div class="page-header">
+        <div>
+          <div class="page-eyebrow">Kinerja</div>
+          <h1>KPI</h1>
+        </div>
         <div class="d-flex gap-2">
-          <button id="kpi-export-btn" type="button" class="btn btn-outline-secondary">Ekspor Laporan</button>
-          <button id="kpi-add-btn" type="button" class="btn btn-primary d-none">+ Tambah KPI</button>
+          <button id="kpi-export-btn" type="button" class="btn btn-outline-secondary">
+            <i class="bi bi-download"></i> Ekspor Laporan
+          </button>
+          <button id="kpi-add-btn" type="button" class="btn btn-primary d-none">
+            <i class="bi bi-plus-lg"></i> Tambah KPI
+          </button>
         </div>
       </div>
 
       <div class="row g-3 mb-3" id="kpi-summary-cards"></div>
 
-      <div class="row g-2 mb-3">
-        <div class="col-sm-4 d-none" id="kpi-filter-pegawai-wrap">
-          <select id="kpi-filter-pegawai" class="form-select" aria-label="Filter pegawai">
-            <option value="">Semua Pegawai</option>
-          </select>
-        </div>
-        <div class="col-sm-4">
-          <input
-            id="kpi-filter-period"
-            type="text"
-            class="form-control"
-            placeholder="Filter periode (contoh: 2026-1)"
-          />
-        </div>
-        <div class="col-sm-4">
-          <select id="kpi-filter-status" class="form-select" aria-label="Filter status KPI">
-            <option value="">Semua Status</option>
-            <option value="not_started">Belum Mulai</option>
-            <option value="on_track">On Track</option>
-            <option value="at_risk">Berisiko</option>
-            <option value="achieved">Tercapai</option>
-          </select>
+      <div class="filter-bar">
+        <div class="row g-2">
+          <div class="col-sm-4 d-none" id="kpi-filter-pegawai-wrap">
+            <select id="kpi-filter-pegawai" class="form-select" aria-label="Filter pegawai">
+              <option value="">Semua Pegawai</option>
+            </select>
+          </div>
+          <div class="col-sm-4">
+            <input
+              id="kpi-filter-period"
+              type="text"
+              class="form-control"
+              placeholder="Filter periode (contoh: 2026-1)"
+            />
+          </div>
+          <div class="col-sm-4">
+            <select id="kpi-filter-status" class="form-select" aria-label="Filter status KPI">
+              <option value="">Semua Status</option>
+              <option value="not_started">Belum Mulai</option>
+              <option value="on_track">On Track</option>
+              <option value="at_risk">Berisiko</option>
+              <option value="achieved">Tercapai</option>
+            </select>
+          </div>
         </div>
       </div>
 

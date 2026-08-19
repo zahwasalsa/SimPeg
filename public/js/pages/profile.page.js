@@ -15,23 +15,28 @@ const JENIS_KELAMIN_OPTIONS = [
 
 let currentPegawaiId = null;
 
-const detailRow = (label, value) => `
-  <dt class="col-sm-4">${escapeHtml(label)}</dt>
-  <dd class="col-sm-8">${value}</dd>`;
+const detailRow = (label, value, icon = "bi-dot") => `
+  <div class="info-row">
+    <i class="bi ${icon}"></i>
+    <span class="info-row-label">${escapeHtml(label)}</span>
+    <span class="info-row-value">${value}</span>
+  </div>`;
 
 const renderAccountCard = (user) => `
   <div class="card profile-card mb-3">
+    <div class="profile-banner">
+      <span class="app-user-avatar profile-avatar">${escapeHtml(user.email.slice(0, 2).toUpperCase())}</span>
+      <div>
+        <h2 class="h5 mb-2">${escapeHtml(user.email)}</h2>
+        <span class="badge text-bg-primary text-capitalize me-1">${escapeHtml(user.role)}</span>
+        <span class="badge ${user.isActive ? "text-bg-success" : "text-bg-secondary"}">
+          ${user.isActive ? "Aktif" : "Nonaktif"}
+        </span>
+      </div>
+    </div>
     <div class="card-body">
-      <dl class="row mb-0">
-        <dt class="col-sm-4">Email</dt>
-        <dd class="col-sm-8">${escapeHtml(user.email)}</dd>
-        <dt class="col-sm-4">Role</dt>
-        <dd class="col-sm-8"><span class="badge text-bg-primary">${escapeHtml(user.role)}</span></dd>
-        <dt class="col-sm-4">Status</dt>
-        <dd class="col-sm-8">${user.isActive ? "Aktif" : "Nonaktif"}</dd>
-        <dt class="col-sm-4">Login terakhir</dt>
-        <dd class="col-sm-8">${formatDateTime(user.lastLogin)}</dd>
-      </dl>
+      ${detailRow("Email", escapeHtml(user.email), "bi-envelope")}
+      ${detailRow("Login terakhir", formatDateTime(user.lastLogin), "bi-clock-history")}
     </div>
   </div>`;
 
@@ -92,32 +97,36 @@ const loadPegawaiProfile = async () => {
     ]);
 
     const rows = [
-      detailRow("NIP", escapeHtml(pegawai.nip)),
-      detailRow("Nama Lengkap", escapeHtml(pegawai.namaLengkap)),
-      detailRow("Divisi", escapeHtml(divisiName)),
-      detailRow("Jabatan", escapeHtml(jabatanName)),
-      detailRow("Status Kepegawaian", escapeHtml(pegawai.statusKepegawaian)),
-      detailRow("Jenis Kelamin", escapeHtml(pegawai.jenisKelamin || "-")),
-      detailRow("Tempat Lahir", escapeHtml(pegawai.tempatLahir || "-")),
-      detailRow("Tanggal Lahir", pegawai.tanggalLahir ? formatDate(pegawai.tanggalLahir) : "-"),
-      detailRow("Alamat", escapeHtml(pegawai.alamat || "-")),
-      detailRow("No. Telepon", escapeHtml(pegawai.noTelepon || "-")),
+      detailRow("NIP", escapeHtml(pegawai.nip), "bi-card-text"),
+      detailRow("Nama Lengkap", escapeHtml(pegawai.namaLengkap), "bi-person"),
+      detailRow("Divisi", escapeHtml(divisiName), "bi-diagram-3"),
+      detailRow("Jabatan", escapeHtml(jabatanName), "bi-briefcase"),
+      detailRow("Status Kepegawaian", escapeHtml(pegawai.statusKepegawaian), "bi-patch-check"),
+      detailRow("Jenis Kelamin", escapeHtml(pegawai.jenisKelamin || "-"), "bi-gender-ambiguous"),
+      detailRow("Tempat Lahir", escapeHtml(pegawai.tempatLahir || "-"), "bi-geo-alt"),
+      detailRow(
+        "Tanggal Lahir",
+        pegawai.tanggalLahir ? formatDate(pegawai.tanggalLahir) : "-",
+        "bi-calendar-event",
+      ),
+      detailRow("Alamat", escapeHtml(pegawai.alamat || "-"), "bi-house"),
+      detailRow("No. Telepon", escapeHtml(pegawai.noTelepon || "-"), "bi-telephone"),
     ];
 
     container.innerHTML = `
       <div class="card profile-card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-person-badge text-primary"></i> Data Kepegawaian</span>
+          <button id="profile-edit-btn" class="btn btn-sm btn-outline-primary" type="button">
+            <i class="bi bi-pencil-square"></i> Edit Profil
+          </button>
+        </div>
         <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2 class="h5 mb-0">Data Kepegawaian</h2>
-            <button id="profile-edit-btn" class="btn btn-sm btn-outline-primary" type="button">
-              Edit Profil
-            </button>
-          </div>
           <p class="text-muted small">
             Anda hanya dapat mengubah data pribadi (jenis kelamin, tempat/tanggal lahir, alamat, no.
             telepon). NIP, nama, divisi, jabatan, dan status kepegawaian hanya dapat diubah oleh admin/HRD.
           </p>
-          <dl class="row mb-0">${rows.join("")}</dl>
+          <div>${rows.join("")}</div>
         </div>
       </div>`;
 
@@ -141,7 +150,9 @@ const init = async () => {
   document.getElementById("profile-content").innerHTML = `
     ${renderAccountCard(user)}
     ${currentPegawaiId ? '<div id="profile-pegawai"><div class="text-muted">Memuat data kepegawaian...</div></div>' : ""}
-    <button id="logout-btn-page" class="btn btn-outline-danger mt-3" type="button">Logout</button>
+    <button id="logout-btn-page" class="btn btn-outline-danger mt-3" type="button">
+      <i class="bi bi-box-arrow-right"></i> Logout
+    </button>
   `;
 
   document.getElementById("logout-btn-page").addEventListener("click", async () => {

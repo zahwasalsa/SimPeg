@@ -18,7 +18,7 @@ app.use(
       directives: {
         ...helmet.contentSecurityPolicy.getDefaultDirectives(),
         "script-src": ["'self'", "https://cdn.jsdelivr.net"],
-        "style-src": ["'self'", "https://cdn.jsdelivr.net"],
+        "style-src": ["'self'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
       },
     },
   }),

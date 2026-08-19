@@ -52,13 +52,14 @@ const roadmapProgressSummary = async () => {
   return { total: rows.length, averageProgress: Math.round((sum / rows.length) * 100) / 100 };
 };
 
-const statCard = (label, value, href) => `
+const statCard = (label, value, href, icon = "bi-bar-chart", variant = "primary") => `
   <div class="col-6 col-md-3">
     <a href="${href}" class="text-decoration-none">
-      <div class="card h-100">
+      <div class="card stat-tile stat-tile-${variant} h-100">
         <div class="card-body">
-          <div class="text-muted small">${escapeHtml(label)}</div>
-          <div class="h3 mb-0">${value}</div>
+          <div class="stat-tile-icon"><i class="bi ${icon}"></i></div>
+          <div class="stat-tile-value">${value}</div>
+          <div class="stat-tile-label">${escapeHtml(label)}</div>
         </div>
       </div>
     </a>
@@ -98,39 +99,74 @@ const loadManageStats = async () => {
 
   const cards = [];
   if (pegawaiRes.status === "fulfilled") {
-    cards.push(statCard("Pegawai Aktif", pegawaiRes.value.pagination.total, "/pegawai"));
+    cards.push(statCard("Pegawai Aktif", pegawaiRes.value.pagination.total, "/pegawai", "bi-people"));
   }
   if (divisiRes.status === "fulfilled") {
-    cards.push(statCard("Total Divisi", divisiRes.value.pagination.total, "/divisi"));
+    cards.push(statCard("Total Divisi", divisiRes.value.pagination.total, "/divisi", "bi-diagram-3", "info"));
   }
   if (jabatanRes.status === "fulfilled") {
-    cards.push(statCard("Total Jabatan", jabatanRes.value.pagination.total, "/jabatan"));
+    cards.push(
+      statCard("Total Jabatan", jabatanRes.value.pagination.total, "/jabatan", "bi-briefcase", "info"),
+    );
   }
   if (cutiPendingRes.status === "fulfilled") {
-    cards.push(statCard("Cuti Menunggu Persetujuan", cutiPendingRes.value.pagination.total, "/cuti"));
+    cards.push(
+      statCard(
+        "Cuti Menunggu Persetujuan",
+        cutiPendingRes.value.pagination.total,
+        "/cuti",
+        "bi-airplane",
+        "warning",
+      ),
+    );
   }
   if (dokumenPendingRes.status === "fulfilled") {
     cards.push(
-      statCard("Dokumen Menunggu Persetujuan", dokumenPendingRes.value.pagination.total, "/dokumen"),
+      statCard(
+        "Dokumen Menunggu Persetujuan",
+        dokumenPendingRes.value.pagination.total,
+        "/dokumen",
+        "bi-file-earmark-text",
+        "warning",
+      ),
     );
   }
   if (dokumenExpiringRes.status === "fulfilled") {
-    cards.push(statCard("Dokumen Akan Kedaluwarsa", dokumenExpiringRes.value.pagination.total, "/dokumen"));
+    cards.push(
+      statCard(
+        "Dokumen Akan Kedaluwarsa",
+        dokumenExpiringRes.value.pagination.total,
+        "/dokumen",
+        "bi-exclamation-triangle",
+        "danger",
+      ),
+    );
   }
   // FR-DASH-002: KPI Summary. Org-wide across all pegawai (getKpiSummary is
   // only self-scoped for role "pegawai" — admin/hrd get the full aggregate).
   if (kpiSummaryRes.status === "fulfilled") {
     const kpiSummary = kpiSummaryRes.value.data;
-    cards.push(statCard("Total KPI Pegawai", kpiSummary.total, "/kpi"));
-    cards.push(statCard("Rata-rata Progress KPI", `${kpiSummary.averagePercentage}%`, "/kpi"));
-    cards.push(statCard("KPI Achieved", kpiSummary.byStatus.achieved, "/kpi"));
-    cards.push(statCard("KPI On Track", kpiSummary.byStatus.on_track, "/kpi"));
-    cards.push(statCard("KPI At Risk", kpiSummary.byStatus.at_risk, "/kpi"));
+    cards.push(statCard("Total KPI Pegawai", kpiSummary.total, "/kpi", "bi-graph-up-arrow"));
+    cards.push(
+      statCard("Rata-rata Progress KPI", `${kpiSummary.averagePercentage}%`, "/kpi", "bi-speedometer2"),
+    );
+    cards.push(statCard("KPI Achieved", kpiSummary.byStatus.achieved, "/kpi", "bi-trophy", "success"));
+    cards.push(
+      statCard("KPI On Track", kpiSummary.byStatus.on_track, "/kpi", "bi-arrow-up-right-circle", "warning"),
+    );
+    cards.push(
+      statCard("KPI At Risk", kpiSummary.byStatus.at_risk, "/kpi", "bi-exclamation-triangle", "danger"),
+    );
   }
   // FR-DASH-003: progres karier, rata-rata seluruh pegawai.
   if (roadmapSummaryRes.status === "fulfilled") {
     cards.push(
-      statCard("Rata-rata Progress Karier", `${roadmapSummaryRes.value.averageProgress}%`, "/roadmap-karier"),
+      statCard(
+        "Rata-rata Progress Karier",
+        `${roadmapSummaryRes.value.averageProgress}%`,
+        "/roadmap-karier",
+        "bi-signpost-split",
+      ),
     );
   }
 
@@ -171,8 +207,8 @@ const loadOwnDivisiJabatan = async (user) => {
           : Promise.resolve("-"),
       ]);
 
-      cards.push(statCard("Divisi Anda", escapeHtml(divisiName), "/profile"));
-      cards.push(statCard("Jabatan Anda", escapeHtml(jabatanName), "/profile"));
+      cards.push(statCard("Divisi Anda", escapeHtml(divisiName), "/profile", "bi-diagram-3", "info"));
+      cards.push(statCard("Jabatan Anda", escapeHtml(jabatanName), "/profile", "bi-briefcase", "info"));
     } catch {
       cards.push(
         '<div class="col-12"><div class="alert alert-warning mb-0">Data kepegawaian belum bisa dimuat saat ini.</div></div>',
@@ -200,14 +236,36 @@ const loadOwnDivisiJabatan = async (user) => {
 
   if (absensiRes.status === "fulfilled") {
     const row = absensiRes.value.data[0];
-    cards.push(statCard("Absensi Hari Ini", row ? "Sudah Absen" : "Belum Absen", "/absensi"));
+    cards.push(
+      statCard(
+        "Absensi Hari Ini",
+        row ? "Sudah Absen" : "Belum Absen",
+        "/absensi",
+        "bi-calendar-check",
+        row ? "success" : "warning",
+      ),
+    );
   }
   if (cutiRes.status === "fulfilled") {
-    cards.push(statCard("Cuti Menunggu Persetujuan", cutiRes.value.pagination.total, "/cuti"));
+    cards.push(
+      statCard(
+        "Cuti Menunggu Persetujuan",
+        cutiRes.value.pagination.total,
+        "/cuti",
+        "bi-airplane",
+        "warning",
+      ),
+    );
   }
   if (dokumenExpiringRes.status === "fulfilled") {
     cards.push(
-      statCard("Dokumen Anda Akan Kedaluwarsa", dokumenExpiringRes.value.pagination.total, "/dokumen"),
+      statCard(
+        "Dokumen Anda Akan Kedaluwarsa",
+        dokumenExpiringRes.value.pagination.total,
+        "/dokumen",
+        "bi-exclamation-triangle",
+        "danger",
+      ),
     );
   }
   // FR-DASH-002: KPI Summary — self-scoped for pegawai ("KPI saya"), org-wide
@@ -215,11 +273,36 @@ const loadOwnDivisiJabatan = async (user) => {
   if (kpiSummaryRes.status === "fulfilled") {
     const kpiSummary = kpiSummaryRes.value.data;
     const suffix = user.role === "pimpinan" ? " (Semua Pegawai)" : " Anda";
-    cards.push(statCard(`Total KPI${suffix}`, kpiSummary.total, "/kpi"));
-    cards.push(statCard(`Rata-rata Progress KPI${suffix}`, `${kpiSummary.averagePercentage}%`, "/kpi"));
-    cards.push(statCard(`KPI Achieved${suffix}`, kpiSummary.byStatus.achieved, "/kpi"));
-    cards.push(statCard(`KPI On Track${suffix}`, kpiSummary.byStatus.on_track, "/kpi"));
-    cards.push(statCard(`KPI At Risk${suffix}`, kpiSummary.byStatus.at_risk, "/kpi"));
+    cards.push(statCard(`Total KPI${suffix}`, kpiSummary.total, "/kpi", "bi-graph-up-arrow"));
+    cards.push(
+      statCard(
+        `Rata-rata Progress KPI${suffix}`,
+        `${kpiSummary.averagePercentage}%`,
+        "/kpi",
+        "bi-speedometer2",
+      ),
+    );
+    cards.push(
+      statCard(`KPI Achieved${suffix}`, kpiSummary.byStatus.achieved, "/kpi", "bi-trophy", "success"),
+    );
+    cards.push(
+      statCard(
+        `KPI On Track${suffix}`,
+        kpiSummary.byStatus.on_track,
+        "/kpi",
+        "bi-arrow-up-right-circle",
+        "warning",
+      ),
+    );
+    cards.push(
+      statCard(
+        `KPI At Risk${suffix}`,
+        kpiSummary.byStatus.at_risk,
+        "/kpi",
+        "bi-exclamation-triangle",
+        "danger",
+      ),
+    );
   }
   // FR-DASH-003: progres karier.
   if (roadmapSummaryRes.status === "fulfilled") {
@@ -229,6 +312,7 @@ const loadOwnDivisiJabatan = async (user) => {
         `Progress Karier${roadmapSuffix}`,
         `${roadmapSummaryRes.value.averageProgress}%`,
         "/roadmap-karier",
+        "bi-signpost-split",
       ),
     );
   }
@@ -241,10 +325,10 @@ const loadStats = async (user) =>
 
 // --- Reminder ---
 
-const reminderAlert = (variant, message, href, ctaLabel) => `
-  <div class="alert alert-${variant} d-flex justify-content-between align-items-center mb-2">
-    <span>${message}</span>
-    <a href="${href}" class="btn btn-sm btn-${variant}">${escapeHtml(ctaLabel)}</a>
+const reminderAlert = (variant, message, href, ctaLabel, icon = "bi-bell") => `
+  <div class="alert alert-${variant} d-flex justify-content-between align-items-center gap-2 mb-2">
+    <span class="d-flex align-items-center gap-2"><i class="bi ${icon}"></i> ${message}</span>
+    <a href="${href}" class="btn btn-sm btn-${variant} flex-shrink-0">${escapeHtml(ctaLabel)}</a>
   </div>`;
 
 const loadReminders = async (user) => {
@@ -266,6 +350,7 @@ const loadReminders = async (user) => {
             `Ada <strong>${cutiRes.pagination.total}</strong> pengajuan cuti yang menunggu persetujuan Anda.`,
             "/cuti",
             "Tinjau Sekarang",
+            "bi-airplane",
           ),
         );
       }
@@ -276,13 +361,22 @@ const loadReminders = async (user) => {
             `Ada <strong>${dokumenPendingRes.pagination.total}</strong> dokumen yang menunggu persetujuan Anda.`,
             "/dokumen",
             "Tinjau Sekarang",
+            "bi-file-earmark-text",
           ),
         );
       }
     } else if (SELF_SERVICE_ROLES.includes(user.role)) {
       const res = await listAbsensi({ page: 1, limit: 1, tanggal: todayStr() });
       if (res.data.length === 0) {
-        alerts.push(reminderAlert("info", "Anda belum absen hari ini.", "/absensi", "Absen Sekarang"));
+        alerts.push(
+          reminderAlert(
+            "info",
+            "Anda belum absen hari ini.",
+            "/absensi",
+            "Absen Sekarang",
+            "bi-calendar-check",
+          ),
+        );
       }
     }
 
@@ -298,6 +392,7 @@ const loadReminders = async (user) => {
           `Ada <strong>${dokumenExpiringRes.pagination.total}</strong> dokumen ${subject}yang akan/sudah kedaluwarsa.`,
           "/dokumen",
           "Lihat Dokumen",
+          "bi-exclamation-triangle",
         ),
       );
     }
@@ -311,8 +406,12 @@ const loadReminders = async (user) => {
 
 // --- Quick Menu ---
 
-const quickMenuBtn = (label, href, variant = "outline-primary") =>
-  `<div class="col-auto"><a href="${href}" class="btn btn-${variant} btn-sm">${escapeHtml(label)}</a></div>`;
+const quickMenuBtn = (label, href, icon, variant = "outline-primary") =>
+  `<div class="col-6 col-md-auto">
+     <a href="${href}" class="btn btn-${variant} btn-sm app-quickmenu-btn">
+       <i class="bi ${icon}"></i> ${escapeHtml(label)}
+     </a>
+   </div>`;
 
 const loadQuickMenu = (user) => {
   const el = document.getElementById("dashboard-quickmenu");
@@ -320,24 +419,24 @@ const loadQuickMenu = (user) => {
   let buttons;
   if (MANAGE_ROLES.includes(user.role)) {
     buttons = [
-      quickMenuBtn("+ Tambah Pegawai", "/pegawai", "primary"),
-      quickMenuBtn("+ Tambah Divisi", "/divisi"),
-      quickMenuBtn("Kelola Cuti", "/cuti"),
-      quickMenuBtn("Kelola Dokumen", "/dokumen"),
+      quickMenuBtn("Tambah Pegawai", "/pegawai", "bi-person-plus", "primary"),
+      quickMenuBtn("Tambah Divisi", "/divisi", "bi-diagram-3"),
+      quickMenuBtn("Kelola Cuti", "/cuti", "bi-airplane"),
+      quickMenuBtn("Kelola Dokumen", "/dokumen", "bi-file-earmark-text"),
     ];
   } else if (SELF_SERVICE_ROLES.includes(user.role)) {
     buttons = [
-      quickMenuBtn("Absen Masuk/Keluar", "/absensi", "primary"),
-      quickMenuBtn("Ajukan Cuti", "/cuti"),
-      quickMenuBtn("Unggah Dokumen", "/dokumen"),
+      quickMenuBtn("Absen Masuk/Keluar", "/absensi", "bi-calendar-check", "primary"),
+      quickMenuBtn("Ajukan Cuti", "/cuti", "bi-airplane"),
+      quickMenuBtn("Unggah Dokumen", "/dokumen", "bi-cloud-upload"),
     ];
   } else {
     // Pimpinan: read-only across Absensi/Cuti/Dokumen (POST is 403 for
     // them), so their quick menu only offers navigation, not actions.
     buttons = [
-      quickMenuBtn("Lihat Absensi", "/absensi"),
-      quickMenuBtn("Lihat Cuti", "/cuti"),
-      quickMenuBtn("Lihat Dokumen", "/dokumen"),
+      quickMenuBtn("Lihat Absensi", "/absensi", "bi-calendar-check"),
+      quickMenuBtn("Lihat Cuti", "/cuti", "bi-airplane"),
+      quickMenuBtn("Lihat Dokumen", "/dokumen", "bi-file-earmark-text"),
     ];
   }
 
@@ -346,10 +445,12 @@ const loadQuickMenu = (user) => {
 
 // --- Recent Activity ---
 
-const activityCard = (title, bodyHtml) => `
+const activityCard = (title, bodyHtml, icon = "bi-clock-history") => `
   <div class="col-12 col-lg-6">
     <div class="card h-100">
-      <div class="card-header">${escapeHtml(title)}</div>
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi ${icon} text-primary"></i> ${escapeHtml(title)}
+      </div>
       <div class="card-body p-0">${bodyHtml}</div>
     </div>
   </div>`;
@@ -431,8 +532,12 @@ const loadActivity = async (user) => {
       const pegawaiMap = Object.fromEntries(pegawaiRes.data.map((p) => [p.id, p.namaLengkap]));
 
       el.innerHTML = [
-        activityCard("Pengajuan Cuti Terbaru", cutiActivityList(cutiRes.data, pegawaiMap)),
-        activityCard("Dokumen Terbaru", dokumenActivityList(dokumenRes.data, pegawaiMap)),
+        activityCard("Pengajuan Cuti Terbaru", cutiActivityList(cutiRes.data, pegawaiMap), "bi-airplane"),
+        activityCard(
+          "Dokumen Terbaru",
+          dokumenActivityList(dokumenRes.data, pegawaiMap),
+          "bi-file-earmark-text",
+        ),
       ].join("");
       return;
     }
@@ -443,8 +548,8 @@ const loadActivity = async (user) => {
     ]);
 
     el.innerHTML = [
-      activityCard("Absensi Terbaru Anda", absensiActivityList(absensiRes.data)),
-      activityCard("Cuti Terbaru Anda", cutiActivityList(cutiRes.data, null)),
+      activityCard("Absensi Terbaru Anda", absensiActivityList(absensiRes.data), "bi-calendar-check"),
+      activityCard("Cuti Terbaru Anda", cutiActivityList(cutiRes.data, null), "bi-airplane"),
     ].join("");
   } catch {
     el.innerHTML =
@@ -461,10 +566,13 @@ const init = async () => {
   renderNavbar("/dashboard");
 
   document.getElementById("dashboard-welcome").innerHTML = `
-    <div class="card">
-      <div class="card-body">
-        <h2 class="h5 mb-1">Selamat datang, ${escapeHtml(user.email)}</h2>
-        <span class="badge text-bg-primary">${escapeHtml(user.role)}</span>
+    <div class="card app-welcome-card">
+      <div class="card-body d-flex align-items-center gap-3">
+        <span class="app-user-avatar app-welcome-avatar">${escapeHtml(user.email.slice(0, 2).toUpperCase())}</span>
+        <div>
+          <h2 class="h5 mb-1">Selamat datang, ${escapeHtml(user.email)}</h2>
+          <span class="badge text-bg-primary text-capitalize">${escapeHtml(user.role)}</span>
+        </div>
       </div>
     </div>
   `;

@@ -152,17 +152,17 @@ const columns = () => {
       label: "",
       render: (row) => {
         const buttons = [
-          `<button class="btn btn-sm btn-outline-secondary me-1" data-action="detail" data-id="${row.id}" type="button">Detail</button>`,
+          `<button class="btn btn-sm btn-outline-secondary me-1" data-action="detail" data-id="${row.id}" type="button"><i class="bi bi-eye"></i> Detail</button>`,
         ];
         if (isPegawai()) {
           buttons.push(
-            `<button class="btn btn-sm btn-outline-primary me-1" data-action="input-capaian" data-id="${row.id}" type="button">Input Capaian</button>`,
+            `<button class="btn btn-sm btn-outline-primary me-1" data-action="input-capaian" data-id="${row.id}" type="button"><i class="bi bi-pencil-square"></i> Input Capaian</button>`,
           );
         }
         if (canManage()) {
           buttons.push(
-            `<button class="btn btn-sm btn-outline-secondary me-1" data-action="edit-target" data-id="${row.id}" type="button">Edit Target</button>`,
-            `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" type="button">Hapus</button>`,
+            `<button class="btn btn-sm btn-outline-secondary me-1" data-action="edit-target" data-id="${row.id}" type="button"><i class="bi bi-sliders"></i> Edit Target</button>`,
+            `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" type="button"><i class="bi bi-trash"></i> Hapus</button>`,
           );
         }
         return buttons.join("");
@@ -197,12 +197,21 @@ const load = async () => {
 // Summary cards double as status shortcuts — clicking one sets the Status
 // filter and reloads the table, same data source as the badges/progress
 // bars below so the numbers always agree with what's in the table.
-const summaryCardHtml = (label, value, statusValue, colorClass) => `
+const SUMMARY_ICONS = {
+  "": "bi-list-check",
+  not_started: "bi-hourglass-split",
+  at_risk: "bi-exclamation-triangle",
+  on_track: "bi-arrow-up-right-circle",
+  achieved: "bi-trophy",
+};
+
+const summaryCardHtml = (label, value, statusValue, variant = "primary") => `
   <div class="col-6 col-md-4 col-lg">
-    <button type="button" class="btn btn-outline-secondary border w-100 h-100 text-start kpi-summary-card"
+    <button type="button" class="stat-tile stat-tile-${variant} kpi-summary-card w-100 h-100 text-start border-0"
       data-status="${statusValue}">
-      <div class="text-muted small">${escapeHtml(label)}</div>
-      <div class="h4 mb-0 ${colorClass}">${value}</div>
+      <div class="stat-tile-icon"><i class="bi ${SUMMARY_ICONS[statusValue] || "bi-list-check"}"></i></div>
+      <div class="stat-tile-value">${value}</div>
+      <div class="stat-tile-label">${escapeHtml(label)}</div>
     </button>
   </div>`;
 
@@ -211,11 +220,11 @@ const loadSummary = async () => {
     const res = await getKpiSummary({ pegawaiId: state.pegawaiId, period: state.period });
     const s = res.data;
     summaryCardsEl.innerHTML = [
-      summaryCardHtml("Total KPI", s.total, "", ""),
-      summaryCardHtml("Belum Mulai", s.byStatus.not_started, "not_started", "text-secondary"),
-      summaryCardHtml("Berisiko", s.byStatus.at_risk, "at_risk", "text-danger"),
-      summaryCardHtml("On Track", s.byStatus.on_track, "on_track", "text-warning"),
-      summaryCardHtml("Tercapai", s.byStatus.achieved, "achieved", "text-success"),
+      summaryCardHtml("Total KPI", s.total, "", "primary"),
+      summaryCardHtml("Belum Mulai", s.byStatus.not_started, "not_started", "secondary"),
+      summaryCardHtml("Berisiko", s.byStatus.at_risk, "at_risk", "danger"),
+      summaryCardHtml("On Track", s.byStatus.on_track, "on_track", "warning"),
+      summaryCardHtml("Tercapai", s.byStatus.achieved, "achieved", "success"),
     ].join("");
   } catch {
     summaryCardsEl.innerHTML =
@@ -293,7 +302,7 @@ const buildCreateModal = () => {
             <div class="d-flex justify-content-between align-items-center mb-1">
               <h6 class="mb-0">Indikator</h6>
               <button type="button" class="btn btn-sm btn-outline-primary" id="kpi-create-add-row-btn">
-                + Tambah Indikator
+                <i class="bi bi-plus-lg"></i> Tambah Indikator
               </button>
             </div>
             <p class="form-text mb-2">
@@ -478,7 +487,7 @@ const buildDetailModal = () => {
           <div class="d-flex justify-content-between align-items-center mb-2">
             <h6 class="mb-0">Rincian Indikator</h6>
             <button id="kpi-indicator-add-btn" class="btn btn-sm btn-primary d-none" type="button">
-              + Tambah Indikator
+              <i class="bi bi-plus-lg"></i> Tambah Indikator
             </button>
           </div>
           <div id="kpi-indicator-list"></div>
@@ -535,13 +544,13 @@ const indicatorColumns = () => {
         const buttons = [];
         if (isPegawai()) {
           buttons.push(
-            `<button class="btn btn-sm btn-outline-primary me-1" data-action="input-realisasi" data-detailid="${row.id}" type="button">Input Realisasi</button>`,
+            `<button class="btn btn-sm btn-outline-primary me-1" data-action="input-realisasi" data-detailid="${row.id}" type="button"><i class="bi bi-pencil-square"></i> Input Realisasi</button>`,
           );
         }
         if (canManage()) {
           buttons.push(
-            `<button class="btn btn-sm btn-outline-secondary me-1" data-action="edit-indicator" data-detailid="${row.id}" type="button">Edit</button>`,
-            `<button class="btn btn-sm btn-outline-danger" data-action="delete-indicator" data-detailid="${row.id}" type="button">Hapus</button>`,
+            `<button class="btn btn-sm btn-outline-secondary me-1" data-action="edit-indicator" data-detailid="${row.id}" type="button"><i class="bi bi-pencil"></i> Edit</button>`,
+            `<button class="btn btn-sm btn-outline-danger" data-action="delete-indicator" data-detailid="${row.id}" type="button"><i class="bi bi-trash"></i> Hapus</button>`,
           );
         }
         return buttons.join("");

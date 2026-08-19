@@ -123,12 +123,12 @@ const columns = () => {
       label: "",
       render: (row) => {
         const buttons = [
-          `<button class="btn btn-sm btn-outline-secondary me-1" data-action="detail" data-id="${row.id}" type="button">Detail</button>`,
+          `<button class="btn btn-sm btn-outline-secondary me-1" data-action="detail" data-id="${row.id}" type="button"><i class="bi bi-eye"></i> Detail</button>`,
         ];
         if (canManage()) {
           buttons.push(
-            `<button class="btn btn-sm btn-outline-secondary me-1" data-action="edit" data-id="${row.id}" type="button">Edit</button>`,
-            `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" type="button">Hapus</button>`,
+            `<button class="btn btn-sm btn-outline-secondary me-1" data-action="edit" data-id="${row.id}" type="button"><i class="bi bi-pencil"></i> Edit</button>`,
+            `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" type="button"><i class="bi bi-trash"></i> Hapus</button>`,
           );
         }
         return buttons.join("");

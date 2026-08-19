@@ -10,24 +10,31 @@
   <body>
     <div id="app-navbar"></div>
     <main class="container py-4">
-      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-        <h1 class="h3 mb-0">Roadmap Karier</h1>
-        <button id="roadmap-add-btn" type="button" class="btn btn-primary d-none">+ Tambah Roadmap</button>
+      <div class="page-header">
+        <div>
+          <div class="page-eyebrow">Pengembangan Karier</div>
+          <h1>Roadmap Karier</h1>
+        </div>
+        <button id="roadmap-add-btn" type="button" class="btn btn-primary d-none">
+          <i class="bi bi-plus-lg"></i> Tambah Roadmap
+        </button>
       </div>
 
-      <div class="row g-2 mb-3">
-        <div class="col-sm-4 d-none" id="roadmap-filter-pegawai-wrap">
-          <select id="roadmap-filter-pegawai" class="form-select" aria-label="Filter pegawai">
-            <option value="">Semua Pegawai</option>
-          </select>
-        </div>
-        <div class="col-sm-4">
-          <select id="roadmap-filter-status" class="form-select" aria-label="Filter status roadmap">
-            <option value="">Semua Status</option>
-            <option value="in_progress">In Progress</option>
-            <option value="eligible">Eligible</option>
-            <option value="promoted">Promoted</option>
-          </select>
+      <div class="filter-bar">
+        <div class="row g-2">
+          <div class="col-sm-4 d-none" id="roadmap-filter-pegawai-wrap">
+            <select id="roadmap-filter-pegawai" class="form-select" aria-label="Filter pegawai">
+              <option value="">Semua Pegawai</option>
+            </select>
+          </div>
+          <div class="col-sm-4">
+            <select id="roadmap-filter-status" class="form-select" aria-label="Filter status roadmap">
+              <option value="">Semua Status</option>
+              <option value="in_progress">In Progress</option>
+              <option value="eligible">Eligible</option>
+              <option value="promoted">Promoted</option>
+            </select>
+          </div>
         </div>
       </div>
 
