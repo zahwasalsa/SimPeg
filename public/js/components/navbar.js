@@ -41,6 +41,14 @@ const MENU = [
   // pegawai/pimpinan are both view-only (write endpoints 403 for them) but
   // the link stays visible for everyone — same pattern as KPI.
   { label: "Roadmap Karier", href: "/roadmap-karier", roles: ALL_ROLES },
+  // GET /penelitian is open to every role and self-scoped server-side
+  // (pegawai only ever sees their own records); pegawai/admin/hrd can write
+  // (pegawai has full CRUD on their own, unlike KPI/Roadmap Karier), pimpinan
+  // is view-only (write endpoints 403 for them) but the link stays visible.
+  { label: "Penelitian", href: "/penelitian", roles: ALL_ROLES },
+  // GET /hki is likewise open to every role and self-scoped server-side —
+  // same permission shape as Penelitian.
+  { label: "HKI", href: "/hki", roles: ALL_ROLES },
   // GET /users (list) is admin-only at the backend — even hrd gets 403,
   // unlike Pegawai's admin+hrd matrix — so this link is stricter than Pegawai.
   { label: "Manajemen User", href: "/users", roles: ADMIN_ONLY },

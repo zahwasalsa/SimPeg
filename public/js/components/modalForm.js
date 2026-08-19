@@ -144,6 +144,43 @@ const buildModal = () => {
   return el;
 };
 
+// Bootstrap 5's default CSS gives every `.modal`/`.modal-backdrop` the same
+// fixed z-index — it does not auto-increment across multiple simultaneously
+// open modals. When this shared form modal is opened on top of an
+// already-open modal (e.g. KPI's/Penelitian's detail modal, whose "+ Tambah
+// ..." button opens this while staying open behind it), both end up tied on
+// z-index and DOM order decides the winner — which can bury this modal
+// (and make its Simpan button unclickable) under the other one. Once
+// Bootstrap reports this modal is actually shown, push it + its own backdrop
+// above every other currently-open modal/backdrop so it's always on top and
+// interactive, regardless of DOM order.
+const bringToFrontOverOtherModals = (el) => {
+  const others = Array.from(document.querySelectorAll(".modal.show")).filter((node) => node !== el);
+  // This modal's own backdrop is the most recently appended one — Bootstrap
+  // just finished inserting it for this exact show, synchronously before
+  // "shown.bs.modal" fires.
+  const backdrops = document.querySelectorAll(".modal-backdrop");
+  const ownBackdrop = backdrops[backdrops.length - 1];
+  const otherBackdrops = Array.from(backdrops).filter((node) => node !== ownBackdrop);
+
+  if (others.length === 0 && otherBackdrops.length === 0) {
+    el.style.zIndex = "";
+    if (ownBackdrop) {
+      ownBackdrop.style.zIndex = "";
+    }
+    return;
+  }
+
+  const maxZ = [...others, ...otherBackdrops].reduce(
+    (max, node) => Math.max(max, parseInt(getComputedStyle(node).zIndex, 10) || 0),
+    0,
+  );
+  el.style.zIndex = String(maxZ + 20);
+  if (ownBackdrop) {
+    ownBackdrop.style.zIndex = String(maxZ + 10);
+  }
+};
+
 export const openFormModal = ({ title, fields, submitLabel = "Simpan", onSubmit }) => {
   const el = modalEl || (modalEl = buildModal());
 
@@ -154,5 +191,6 @@ export const openFormModal = ({ title, fields, submitLabel = "Simpan", onSubmit 
   document.getElementById("app-form-modal-body").innerHTML = fields.map(renderField).join("");
   document.getElementById("app-form-modal-submit").textContent = submitLabel;
 
+  el.addEventListener("shown.bs.modal", () => bringToFrontOverOtherModals(el), { once: true });
   window.bootstrap.Modal.getOrCreateInstance(el).show();
 };
