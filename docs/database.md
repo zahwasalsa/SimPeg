@@ -567,21 +567,135 @@ jabatan (dua kali — jabatan_saat_ini_id dan jabatan_target_id)
 
 # 15. Penelitian
 
+Sesuai `docs/roadmap.md` Phase 8 (dependency: Pegawai — sudah selesai) dan blueprint
+FR-RES-001 s/d FR-RES-005. Tidak ada alur approval/verifikasi — sama seperti KPI dan
+Roadmap Karier, blueprint tidak mensyaratkannya. **Berbeda dari KPI/Roadmap Karier**, modul
+ini tidak punya pola "admin/HRD menetapkan untuk pegawai" — penelitian pada dasarnya
+dilaporkan sendiri oleh penelitinya (FR-RES-001..004 semuanya berbunyi "Pengguna dapat
+menginput..."), jadi pegawai punya CRUD penuh atas datanya sendiri, mirip pola kepemilikan
+`dokumen` (unggah/kelola milik sendiri) ketimbang pola KPI (hanya mengisi capaian pada baris
+yang dibuatkan HRD/Admin). **Ini keputusan desain eksplisit** — blueprint tidak merinci role
+per-FR untuk modul ini, jadi ditafsirkan dari kalimat "Pengguna", bukan "HRD/Admin", yang
+dipakai konsisten di seluruh FR-RES.
+
 ## penelitian
 
-Target penelitian.
+Proyek penelitian pegawai (pengusul). Adaptasi dari `research_projects` pada blueprint §17
+(nama tabel disesuaikan ke konvensi tunggal proyek ini, sama seperti `documents` →
+`dokumen`).
+
+Kolom
+
+- id
+- pegawai_id — FK ke `pegawai.id`, `ON DELETE CASCADE`. Pengusul/pemilik penelitian.
+- judul — VARCHAR(300), wajib
+- skema — VARCHAR(200), nullable. Skema/program pendanaan.
+- dana — NUMERIC, nullable. Jumlah dana hibah — adaptasi kolom `funding` blueprint,
+  memenuhi FR-RES-002 ("menginput data hibah").
+- tahun — INTEGER, wajib
+- created_at
+- updated_at
+- deleted_at
+
+**Catatan desain (FR-RES-001 & FR-RES-005):** blueprint tidak memberi kolom `target` terpisah
+untuk "target penelitian" — draft schema-nya (`research_projects`) hanya punya
+title/scheme/funding/year. Ditafsirkan di sini: proyek penelitian itu sendiri (judul, skema,
+tahun) *adalah* targetnya, bukan angka target terpisah. Tabel `penelitian` juga **tidak
+punya kolom status/progress** — blueprint's daftar ENUM per tabel (§21) tidak menyertakan
+`research_projects` (beda dari `kpis`/`career_roadmaps` yang eksplisit didaftar dengan nilai
+ENUM-nya). "Memantau progres" (FR-RES-005) ditafsirkan sebagai kemampuan melihat
+daftar/riwayat penelitian pegawai dari waktu ke waktu, bukan field status baru yang tidak
+diminta blueprint.
+
+Index
+
+- idx_penelitian_pegawai_id
+- idx_penelitian_tahun
+
+---
+
+## anggota_penelitian
+
+Anggota tim tambahan pada suatu penelitian, di luar pengusul (yang sudah tercatat lewat
+`penelitian.pegawai_id`). Adaptasi dari `research_members` pada blueprint §17 — tabel
+penghubung many-to-many, disebutkan eksplisit di data dictionary blueprint meski tidak
+punya FR tersendiri.
+
+Kolom
+
+- id
+- penelitian_id — FK ke `penelitian.id`, `ON DELETE CASCADE`
+- pegawai_id — FK ke `pegawai.id`, `ON DELETE CASCADE`
+- created_at
+- updated_at
+- deleted_at
+
+Constraint
+
+- `UNIQUE (penelitian_id, pegawai_id)` — satu pegawai tidak bisa ditambahkan dua kali sebagai
+  anggota pada penelitian yang sama.
+
+Index
+
+- idx_anggota_penelitian_penelitian_id
+- idx_anggota_penelitian_pegawai_id
 
 ---
 
 ## publikasi
 
-Publikasi penelitian.
+Luaran publikasi dari suatu penelitian (FR-RES-003). Adaptasi dari `publications` pada
+blueprint §17. Selalu terkait ke satu penelitian induk (blueprint: "Proyek Penelitian →
+Publikasi, satu-ke-banyak") — tidak ada publikasi tanpa penelitian, `penelitian_id` wajib.
+
+Kolom
+
+- id
+- penelitian_id — FK ke `penelitian.id`, `ON DELETE CASCADE`
+- judul — VARCHAR(300), wajib
+- jurnal — VARCHAR(300), nullable
+- terindeks — BOOLEAN, default `false`
+- tahun — INTEGER, wajib
+- created_at
+- updated_at
+- deleted_at
+
+Index
+
+- idx_publikasi_penelitian_id
+- idx_publikasi_tahun
 
 ---
 
 ## hki
 
-Hak Kekayaan Intelektual.
+Hak Kekayaan Intelektual (FR-RES-004). **Blueprint hanya menyebut requirement ini di daftar
+FR — tidak ada definisi tabel `hki` sama sekali di data dictionary §17**, berbeda dari
+`research_projects`/`publications` yang memang didefinisikan blueprint. Skema di bawah ini
+sepenuhnya keputusan desain eksplisit, dibuat seminimal mungkin.
+
+Kolom
+
+- id
+- pegawai_id — FK ke `pegawai.id`, `ON DELETE CASCADE`
+- penelitian_id — FK ke `penelitian.id`, `ON DELETE SET NULL`, nullable. **Opsional** — HKI
+  tidak selalu lahir dari satu proyek penelitian tercatat, jadi tidak dipaksakan wajib
+  terhubung, mengikuti pola nullable FK yang sama seperti
+  `roadmap_karier.jabatan_saat_ini_id`/`jabatan_target_id`.
+- judul — VARCHAR(300), wajib
+- jenis — VARCHAR(100), nullable. Teks bebas (Paten/Hak Cipta/Merek/dst) — **tidak**
+  dipaksakan jadi ENUM karena blueprint tidak memberi daftar jenis HKI yang tetap.
+- nomor_pendaftaran — VARCHAR(100), nullable. HKI yang baru diajukan mungkin belum punya
+  nomor resmi.
+- tanggal_pendaftaran — DATE, nullable
+- created_at
+- updated_at
+- deleted_at
+
+Index
+
+- idx_hki_pegawai_id
+- idx_hki_penelitian_id
 
 ---
 
