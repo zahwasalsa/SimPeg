@@ -1534,57 +1534,313 @@ Error: `401`, `403` bukan admin/HRD, `404` tidak ditemukan, `422` id bukan UUID
 
 # 11. Penelitian
 
-GET
+Diimplementasikan sesuai `docs/roadmap.md` Phase 8 (dependency: Pegawai) dan blueprint
+FR-RES-001 s/d FR-RES-004. Path aktual `/penelitian` (bukan `/research` seperti draft
+blueprint, mengikuti konvensi Indonesia snake_case yang sudah dipakai di seluruh proyek ini).
+Modul ini menggabungkan tiga tabel — `penelitian`, `anggota_penelitian` (tim tambahan di luar
+pengusul), dan `publikasi` — dalam satu module folder `src/modules/penelitian/`, mengikuti pola
+nested-child-resource yang sama seperti `kpi`+`kpi_detail`. HKI (`hki`) adalah modul terpisah
+berdiri sendiri — lihat Bagian 11a. Seluruh endpoint memerlukan
+`Authorization: Bearer <accessToken>`. Role tidak pernah dicek di Controller — gate akses ada
+di `authMiddleware`/`authorize`/`penelitian.authorize.js`, scope data diputuskan di Service.
 
-/research
+**Model permission modul ini berbeda secara fundamental dari KPI/Roadmap Karier** — keputusan
+desain eksplisit, lihat `docs/database.md` §15's "Catatan desain". Blueprint FR-RES-001..004
+memakai frasa "Pengguna dapat menginput...", bukan "HRD/Admin menetapkan...", sehingga
+penelitian ditafsirkan sebagai self-service (pegawai melaporkan penelitiannya sendiri),
+mengikuti pola kepemilikan `dokumen`, bukan pola target-setting `kpi`/`roadmap_karier`.
 
----
+**Role**
 
-GET
+- **Admin/HRD**: dapat mengelola (create/read/update/delete) seluruh data penelitian, anggota
+  tim, dan publikasi milik pegawai mana pun.
+- **Pegawai**: CRUD penuh (create/read/update/**delete**) atas penelitian miliknya sendiri,
+  beserta anggota tim dan publikasi yang tertaut ke penelitian miliknya. **Tidak bisa mengakses
+  atau mengubah data penelitian pegawai lain** — termasuk saat pegawai tersebut hanya berstatus
+  anggota tim (`anggota_penelitian`) pada penelitian pihak lain; keanggotaan tim tidak pernah
+  memberi hak akses tambahan, kepemilikan selalu ditentukan murni dari `penelitian.pegawai_id`
+  (pengusul), bukan siapa saja yang tercatat sebagai anggota.
+- **Pimpinan**: read-only — bisa melihat (list/detail/anggota/publikasi) seluruh data untuk
+  memantau, tidak bisa menulis apa pun (`POST`/`PATCH`/`DELETE` selalu `403`).
 
-/research/{id}
-
----
-
-POST
-
-/research
-
----
-
-PUT
-
-/research/{id}
-
----
-
-DELETE
-
-/research/{id}
-
----
-
-GET
-
-/research/{id}/publications
-
----
-
-POST
-
-/research/{id}/publications
+**Soft delete tidak cascade** — menghapus `penelitian` tidak ikut menghapus (soft-delete)
+`anggota_penelitian`/`publikasi` miliknya; baris anak tetap ada dan dapat dipulihkan, mengikuti
+pola `dokumen`/`dokumen_version` persis (lihat komentar `deleteDokumen` di
+`dokumen.service.js`).
 
 ---
 
-GET
+## GET /penelitian
 
-/research/{id}/intellectual-properties
+Query params: `page`, `limit`, `pegawaiId` (UUID, hanya efektif untuk admin/hrd/pimpinan),
+`tahun` (integer 1900–2100).
+
+- **Admin/HRD/Pimpinan**: melihat seluruh data, `pegawaiId`/`tahun` sebagai filter opsional.
+- **Pegawai**: parameter `pegawaiId` dari query **diabaikan** — hasil selalu otomatis di-scope
+  ke pegawai milik akun yang login. Jika akun belum punya profil pegawai, hasilnya `200` dengan
+  `data: []`.
+
+Response 200 — format pagination standar (lihat Bagian 3). Error: `401` tanpa token.
 
 ---
 
-POST
+## GET /penelitian/{id}
 
-/research/{id}/intellectual-properties
+**Admin/HRD/Pimpinan** bisa lihat siapa pun. **Pegawai** hanya bisa lihat miliknya sendiri
+(dicek lewat `penelitian.pegawai_id` yang dicocokkan ke pegawai milik `req.user.id`). Response
+menyertakan `anggota` (daftar `anggota_penelitian`) dan `publikasi` (daftar `publikasi`) milik
+penelitian ini — mirip `GET /kpi/{id}` yang menyertakan `details`.
+
+```json
+{
+  "success": true,
+  "message": "Detail penelitian",
+  "data": {
+    "id": "...",
+    "pegawaiId": "...",
+    "judul": "Optimasi Basis Data",
+    "skema": "Hibah Internal",
+    "dana": 5000000,
+    "tahun": 2026,
+    "createdAt": "...",
+    "updatedAt": "...",
+    "anggota": [{ "id": "...", "penelitianId": "...", "pegawaiId": "...", "createdAt": "..." }],
+    "publikasi": [
+      { "id": "...", "penelitianId": "...", "judul": "...", "jurnal": "...", "terindeks": true, "tahun": 2026 }
+    ]
+  }
+}
+```
+
+Error: `401`, `403` bukan admin/hrd/pimpinan dan bukan pemilik, `404` tidak ditemukan, `422` id
+bukan UUID.
+
+---
+
+## POST /penelitian
+
+FR-RES-001. Self-service — pegawai melaporkan penelitiannya sendiri.
+
+- **Admin/HRD**: `pegawaiId` **wajib** dikirim (menunjuk penelitian milik pegawai mana pun).
+- **Pegawai**: `pegawaiId` **tidak boleh** dikirim sama sekali (`422` jika dikirim) — pemilik
+  selalu otomatis diri sendiri.
+- **Pimpinan**: `403` — tidak bisa membuat penelitian.
+
+```json
+{ "judul": "Optimasi Basis Data", "skema": "Hibah Internal", "dana": 5000000, "tahun": 2026 }
+```
+
+`judul` dan `tahun` wajib; `skema`/`dana` opsional (`dana` tidak boleh negatif). Response `201`.
+
+Error: `401`, `403` pimpinan atau pegawaiId dikirim oleh pegawai, `404` `pegawaiId` (admin/hrd)
+tidak ditemukan, `422` field tidak valid (`judul`/`tahun` kosong, `dana` negatif, `tahun` di
+luar rentang 1900–2100).
+
+---
+
+## PATCH /penelitian/{id}
+
+**Admin/HRD** unconditional; **pegawai** hanya penelitian miliknya sendiri (full CRUD, tidak
+ada pembatasan field seperti pada `kpi` — pemilik boleh mengubah seluruh field). **Pimpinan**:
+`403`. `pegawaiId` tidak boleh diubah (`422` jika dikirim).
+
+```json
+{ "judul": "Optimasi Basis Data (Revisi)", "dana": 7500000 }
+```
+
+Response 200 — objek penelitian terkini (tanpa `anggota`/`publikasi`, gunakan `GET /:id` untuk
+itu). Error: `401`, `403` bukan admin/hrd dan bukan pemilik (termasuk pimpinan), `404` tidak
+ditemukan, `422` field tidak valid atau `pegawaiId` dikirim.
+
+---
+
+## DELETE /penelitian/{id}
+
+Soft delete (mengisi `deleted_at`). **Admin/HRD** unconditional; **pegawai** boleh menghapus
+penelitian miliknya sendiri (full CRUD, berbeda dari `kpi`/`roadmap_karier` yang admin/hrd-only
+untuk delete). **Pimpinan**: `403`.
+
+Response 200
+
+```json
+{ "success": true, "message": "Data penelitian berhasil dihapus", "data": null }
+```
+
+Error: `401`, `403` bukan admin/hrd dan bukan pemilik (termasuk pimpinan), `404` tidak
+ditemukan, `422` id bukan UUID.
+
+---
+
+## GET /penelitian/{id}/anggota
+
+Daftar anggota tim tambahan (di luar pengusul) pada satu penelitian. Akses mengikuti kepemilikan
+penelitian induk persis seperti `GET /penelitian/{id}` — admin/hrd/pimpinan unconditional,
+pegawai hanya jika `penelitian.pegawai_id` miliknya sendiri (menjadi anggota tim pada penelitian
+pihak lain **tidak** memberi akses baca).
+
+Response 200 — array `anggota_penelitian`. Error: `401`, `403`, `404` penelitian tidak
+ditemukan, `422` id bukan UUID.
+
+---
+
+## POST /penelitian/{id}/anggota
+
+Menambahkan satu pegawai sebagai anggota tim. Body: `{ "pegawaiId": "..." }`. Akses sama seperti
+`PATCH /penelitian/{id}` (admin/hrd unconditional, pegawai hanya pada penelitian miliknya).
+
+Response `201`. Error: `401`, `403`, `404` penelitian atau `pegawaiId` tidak ditemukan, `409`
+pegawai tersebut sudah menjadi anggota (constraint unik `penelitian_id`+`pegawai_id`), `422`
+`pegawaiId` bukan UUID valid.
+
+---
+
+## DELETE /penelitian/{id}/anggota/{anggotaId}
+
+Soft delete satu baris `anggota_penelitian`. Akses sama seperti `POST` di atas.
+
+Response 200 — `data: null`. Error: `401`, `403`, `404` penelitian atau anggota tidak ditemukan
+(termasuk `anggotaId` yang menunjuk baris milik penelitian lain), `422` id/anggotaId bukan UUID.
+
+---
+
+## GET /penelitian/{id}/publikasi
+
+Daftar publikasi hasil penelitian. Akses mengikuti kepemilikan penelitian induk, sama seperti
+`GET /penelitian/{id}/anggota`.
+
+Response 200 — array `publikasi`. Error: `401`, `403`, `404` penelitian tidak ditemukan, `422`
+id bukan UUID.
+
+---
+
+## POST /penelitian/{id}/publikasi
+
+FR-RES-003. Body:
+
+```json
+{ "judul": "Jurnal Basis Data Terdistribusi", "jurnal": "JIKA", "terindeks": true, "tahun": 2026 }
+```
+
+`judul`/`tahun` wajib; `jurnal` opsional; `terindeks` opsional (default `false`). Akses sama
+seperti `POST /penelitian/{id}/anggota`.
+
+Response `201`. Error: `401`, `403`, `404` penelitian tidak ditemukan, `422` field tidak valid.
+
+---
+
+## PATCH /penelitian/{id}/publikasi/{publikasiId}
+
+Seluruh field (`judul`, `jurnal`, `terindeks`, `tahun`) opsional — hanya field yang dikirim yang
+diperbarui. Akses sama seperti endpoint publikasi lainnya.
+
+Response 200 — objek publikasi terkini. Error: `401`, `403`, `404` penelitian atau publikasi
+tidak ditemukan (termasuk `publikasiId` milik penelitian lain), `422` field tidak valid.
+
+---
+
+## DELETE /penelitian/{id}/publikasi/{publikasiId}
+
+Soft delete. Akses sama seperti endpoint publikasi lainnya.
+
+Response 200 — `data: null`. Error: `401`, `403`, `404` penelitian atau publikasi tidak
+ditemukan, `422` id/publikasiId bukan UUID.
+
+---
+
+# 11a. HKI
+
+Diimplementasikan sesuai `docs/roadmap.md` Phase 8 dan blueprint FR-RES-004. Path aktual `/hki`
+(bukan `/research/{id}/intellectual-properties` seperti draft blueprint) — modul berdiri sendiri
+di `src/modules/hki/`, mengikuti pola standalone-module `roadmap_karier` (satu tabel, tanpa
+child resource), bukan pola nested `penelitian`. Seluruh endpoint memerlukan
+`Authorization: Bearer <accessToken>`. Role tidak pernah dicek di Controller — gate akses ada
+di `authMiddleware`/`authorize`/`hki.authorize.js`, scope data diputuskan di Service.
+
+Tabel `hki` **tidak didefinisikan blueprint sama sekali** (hanya requirement text FR-RES-004
+yang ada) — seluruh skemanya adalah keputusan desain eksplisit, lihat `docs/database.md` §15.
+Konsekuensi penting: `hki.pegawai_id` adalah kolom kepemilikan **langsung**, bukan diturunkan
+lewat `penelitian_id` (yang opsional/nullable) — satu pegawai bisa mencatat HKI tanpa pernah
+menautkannya ke proyek penelitian tercatat mana pun.
+
+**Role** — identik dengan Penelitian: **Admin/HRD** kelola semua, **Pegawai** CRUD penuh atas
+HKI miliknya sendiri, **Pimpinan** read-only.
+
+**Aturan `penelitianId` opsional**: jika dikirim (saat create maupun update), sistem
+memverifikasi baris `penelitian` tersebut **memang milik pegawai target yang sama** dengan HKI
+ini (`404` jika bukan) — mencegah satu pegawai menautkan HKI-nya ke proyek penelitian pihak
+lain, termasuk saat admin/hrd yang membuatkan.
+
+---
+
+## GET /hki
+
+Query params: `page`, `limit`, `pegawaiId` (UUID, hanya efektif untuk admin/hrd/pimpinan),
+`penelitianId` (UUID).
+
+- **Admin/HRD/Pimpinan**: melihat seluruh data, filter opsional.
+- **Pegawai**: `pegawaiId` di query diabaikan — selalu di-scope ke miliknya sendiri.
+
+Response 200 — format pagination standar. Error: `401` tanpa token.
+
+---
+
+## GET /hki/{id}
+
+**Admin/HRD/Pimpinan** bisa lihat siapa pun. **Pegawai** hanya miliknya sendiri (`hki.pegawai_id`
+dicocokkan ke pegawai milik `req.user.id`).
+
+Error: `401`, `403` bukan admin/hrd/pimpinan dan bukan pemilik, `404` tidak ditemukan, `422` id
+bukan UUID.
+
+---
+
+## POST /hki
+
+FR-RES-004. Self-service, sama seperti Penelitian.
+
+```json
+{
+  "penelitianId": "...",
+  "judul": "Hak Cipta Aplikasi SimPeg",
+  "jenis": "Hak Cipta",
+  "nomorPendaftaran": "HC-001",
+  "tanggalPendaftaran": "2026-01-15"
+}
+```
+
+- **Admin/HRD**: `pegawaiId` wajib dikirim.
+- **Pegawai**: `pegawaiId` tidak boleh dikirim (`422` jika dikirim).
+- **Pimpinan**: `403`.
+
+`judul` wajib; `penelitianId`/`jenis`/`nomorPendaftaran`/`tanggalPendaftaran` opsional
+(nullable). Response `201`.
+
+Error: `401`, `403` pimpinan atau pegawaiId dikirim oleh pegawai, `404` `pegawaiId` (admin/hrd)
+tidak ditemukan, atau `penelitianId` tidak ditemukan/bukan milik pegawai target, `422` field
+tidak valid (`judul` kosong, `tanggalPendaftaran` bukan format tanggal valid, `penelitianId`
+bukan UUID valid).
+
+---
+
+## PATCH /hki/{id}
+
+**Admin/HRD** unconditional; **pegawai** hanya miliknya sendiri (full CRUD). **Pimpinan**:
+`403`. `pegawaiId` tidak boleh diubah (`422` jika dikirim). Jika `penelitianId` dikirim, tetap
+diverifikasi milik pegawai pemilik baris `hki` ini.
+
+Response 200 — objek HKI terkini. Error: `401`, `403` bukan admin/hrd dan bukan pemilik
+(termasuk pimpinan), `404` tidak ditemukan atau `penelitianId` bukan milik pegawai ini, `422`
+field tidak valid atau `pegawaiId` dikirim.
+
+---
+
+## DELETE /hki/{id}
+
+Soft delete. **Admin/HRD** unconditional; **pegawai** boleh menghapus HKI miliknya sendiri.
+**Pimpinan**: `403`.
+
+Response 200 — `data: null`. Error: `401`, `403` bukan admin/hrd dan bukan pemilik (termasuk
+pimpinan), `404` tidak ditemukan, `422` id bukan UUID.
 
 ---
 
