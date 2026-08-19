@@ -53,7 +53,7 @@ const roadmapProgressSummary = async () => {
 };
 
 const statCard = (label, value, href, icon = "bi-bar-chart", variant = "primary") => `
-  <div class="col-6 col-md-3">
+  <div class="col-6 col-md-4 col-xl-3">
     <a href="${href}" class="text-decoration-none">
       <div class="card stat-tile stat-tile-${variant} h-100">
         <div class="card-body">
