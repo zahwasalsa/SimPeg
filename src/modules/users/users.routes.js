@@ -12,6 +12,8 @@ router.use(authMiddleware);
 
 router.get("/", authorize("admin"), validation.listValidation, validate, controller.list);
 
+router.post("/", authorize("admin"), validation.createValidation, validate, controller.create);
+
 router.get(
   "/:id",
   authorizeSelfOrRoles("id", "admin"),

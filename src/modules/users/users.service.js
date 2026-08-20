@@ -38,6 +38,38 @@ const getUserById = async (id) => {
   };
 };
 
+// Admin-initiated account creation — unlike auth.service.js#register, the
+// role is caller-supplied (validated to one of the 4 roles upstream) rather
+// than hardcoded to 'pegawai'. Duplicate-email handling mirrors #register
+// exactly: checked from the createUser error itself rather than a proactive
+// lookup, since that's the one shape of this error Supabase Auth returns
+// cleanly (unlike updateUserById's — see changeEmail's comment below).
+const createUser = async ({ email, password, role, actorId }) => {
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { role },
+  });
+
+  if (error) {
+    if (error.status === 422 || /already been registered|already exists/i.test(error.message)) {
+      throw new AppError("Email sudah terdaftar", 409);
+    }
+    logger.error("Supabase admin.createUser failed", { message: error.message });
+    throw new AppError("Gagal membuat user", 400);
+  }
+
+  const created = await usersRepository.findById(data.user.id);
+  if (!created) {
+    logger.error("public.users row missing after admin createUser", { userId: data.user.id });
+    throw new AppError("User dibuat namun profil belum tersedia, coba muat ulang halaman", 500);
+  }
+
+  logger.info("User created by admin", { targetId: data.user.id, role, actorId });
+  return sanitizeUser(created);
+};
+
 // Email exists in two places that are only ever synced once, at account
 // creation, by the on_auth_user_created trigger (INSERT only — see
 // 017_auth_user_link_trigger.sql): auth.users.email (what login actually
@@ -161,6 +193,7 @@ const deleteUser = async ({ targetId, actorId }) => {
 module.exports = {
   listUsers,
   getUserById,
+  createUser,
   changeEmail,
   changePassword,
   changeRole,

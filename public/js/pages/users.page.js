@@ -9,6 +9,7 @@ import { escapeHtml, formatDate, formatDateTime } from "../utils/format.js";
 import {
   listUsers,
   getUser,
+  createUser,
   updateUserEmail,
   updateUserPassword,
   updateUserRole,
@@ -34,6 +35,7 @@ const STATUS_VARIANTS = {
 
 const tableEl = document.getElementById("users-table");
 const paginationEl = document.getElementById("users-pagination");
+const addBtn = document.getElementById("users-add-btn");
 
 const state = { page: 1, limit: 10 };
 let currentUser = null;
@@ -94,6 +96,40 @@ const load = async () => {
   } catch (err) {
     renderErrorState(tableEl, err.message || "Gagal memuat data user");
   }
+};
+
+const openCreateModal = () => {
+  openFormModal({
+    title: "Tambah User",
+    submitLabel: "Buat User",
+    fields: [
+      { name: "email", label: "Email", type: "email", required: true },
+      {
+        name: "password",
+        label: "Password",
+        type: "password",
+        required: true,
+        helpText: "Minimal 8 karakter.",
+      },
+      {
+        name: "role",
+        label: "Role",
+        type: "select",
+        required: true,
+        options: ROLE_OPTIONS,
+        value: "pegawai",
+      },
+    ],
+    onSubmit: async (values) => {
+      if (values.password.length < 8) {
+        throw new Error("Password minimal 8 karakter");
+      }
+      await createUser(values);
+      showToast("User berhasil dibuat", "success");
+      state.page = 1;
+      await load();
+    },
+  });
 };
 
 let detailModalEl = null;
@@ -289,6 +325,8 @@ const init = async () => {
   }
 
   renderNavbar("/users");
+
+  addBtn.addEventListener("click", openCreateModal);
 
   tableEl.addEventListener("click", (event) => {
     const btn = event.target.closest("[data-action]");

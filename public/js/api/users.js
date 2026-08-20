@@ -7,6 +7,8 @@ export const listUsers = ({ page = 1, limit = 10 } = {}) => {
 
 export const getUser = (id) => apiFetch(`/users/${id}`);
 
+export const createUser = (payload) => apiFetch("/users", { method: "POST", body: payload });
+
 export const updateUserEmail = (id, payload) =>
   apiFetch(`/users/${id}/email`, { method: "PATCH", body: payload });
 

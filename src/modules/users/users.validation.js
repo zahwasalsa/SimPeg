@@ -7,6 +7,13 @@ const listValidation = [
 
 const idParamValidation = [param("id").isUUID().withMessage("ID tidak valid")];
 
+// Kebijakan password sama seperti auth.validation.js#registerValidation.
+const createValidation = [
+  body("email").isEmail().withMessage("Email tidak valid").normalizeEmail(),
+  body("password").isString().isLength({ min: 8 }).withMessage("Password minimal 8 karakter"),
+  body("role").isIn(["admin", "hrd", "pegawai", "pimpinan"]).withMessage("Role tidak valid"),
+];
+
 const emailValidation = [
   param("id").isUUID().withMessage("ID tidak valid"),
   body("email").isEmail().withMessage("Email tidak valid").normalizeEmail(),
@@ -33,6 +40,7 @@ const statusValidation = [
 module.exports = {
   listValidation,
   idParamValidation,
+  createValidation,
   emailValidation,
   passwordValidation,
   roleValidation,

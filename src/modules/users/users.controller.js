@@ -27,6 +27,20 @@ const detail = async (req, res, next) => {
   }
 };
 
+const create = async (req, res, next) => {
+  try {
+    const user = await usersService.createUser({
+      email: req.body.email,
+      password: req.body.password,
+      role: req.body.role,
+      actorId: req.user.id,
+    });
+    responseHelper.success(res, { statusCode: 201, message: "User berhasil dibuat", data: user });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const changeEmail = async (req, res, next) => {
   try {
     const user = await usersService.changeEmail({
@@ -88,4 +102,4 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { list, detail, changeEmail, changePassword, changeRole, changeStatus, remove };
+module.exports = { list, detail, create, changeEmail, changePassword, changeRole, changeStatus, remove };
