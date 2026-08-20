@@ -71,6 +71,24 @@ a {
 
 /* ===== Page layout ===== */
 
+/* Authenticated pages use container-fluid (not Bootstrap's capped
+   .container) so content uses the space next to the sidebar properly —
+   a centered, max-width container next to a fixed sidebar leaves lopsided
+   empty margins. Capped here instead so ultra-wide monitors don't stretch
+   tables/cards absurdly thin-looking. */
+.app-main {
+  max-width: 1600px;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+@media (max-width: 575.98px) {
+  .app-main {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
 .page-header {
   display: flex;
   flex-wrap: wrap;
@@ -208,6 +226,85 @@ a {
 
 .table-hover tbody tr:hover {
   background-color: rgba(79, 70, 229, 0.04);
+}
+
+/* Action buttons in the last column of a data table. A plain run of
+   inline buttons wraps one-per-line once the column narrows (auto table
+   layout can squeeze this column a lot on laptop-width screens); wrapping
+   them in a tight flex group keeps 2+ buttons per line instead. */
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-width: 148px;
+}
+
+.table-actions .btn {
+  flex: 0 0 auto;
+}
+
+/* Caps a long value (e.g. an email address) so it doesn't crowd out the
+   actions column — the auto table layout otherwise gives whichever column
+   has the longest content as much width as it wants. */
+.table-cell-truncate {
+  display: inline-block;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* ===== Data cards (mobile table alternative) ===== */
+
+.data-cards {
+  display: flex;
+  flex-direction: column;
+}
+
+.data-card {
+  padding: 0.9rem 1.1rem;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.data-card:last-child {
+  border-bottom: none;
+}
+
+.data-card-row {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.3rem 0;
+  font-size: 0.83rem;
+}
+
+.data-card-label {
+  color: var(--app-text-muted);
+  font-weight: 500;
+  min-width: 112px;
+  flex-shrink: 0;
+}
+
+.data-card-value {
+  color: var(--app-text);
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.data-card-value .table-cell-truncate {
+  max-width: 100%;
+}
+
+.data-card-actions {
+  margin-top: 0.5rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--app-border);
+}
+
+.data-card-actions .table-actions {
+  min-width: 0;
 }
 
 /* ===== Badges ===== */

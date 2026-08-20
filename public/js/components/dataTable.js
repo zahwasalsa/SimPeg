@@ -36,13 +36,40 @@ export const renderTable = (
     })
     .join("");
 
+  // A wide table forces horizontal scrolling to reach the last column
+  // (conventionally actions) on narrow screens, so mobile gets a second,
+  // CSS-toggled rendering of the same columns/rows as stacked cards
+  // instead — same data, no scrolling required to find the buttons. A
+  // column with no label (the actions column, by convention across every
+  // page) renders without a label prefix, in its own row at the bottom.
+  const cardsHtml = rows
+    .map((row) => {
+      const fieldsHtml = columns
+        .filter((col) => col.label)
+        .map((col) => {
+          const content = col.render ? col.render(row) : escapeHtml(row[col.key] ?? "-");
+          return `<div class="data-card-row">
+            <span class="data-card-label">${escapeHtml(col.label)}</span>
+            <span class="data-card-value">${content}</span>
+          </div>`;
+        })
+        .join("");
+      const actionsCol = columns.find((col) => !col.label);
+      const actionsHtml = actionsCol
+        ? `<div class="data-card-actions">${actionsCol.render ? actionsCol.render(row) : ""}</div>`
+        : "";
+      return `<div class="data-card">${fieldsHtml}${actionsHtml}</div>`;
+    })
+    .join("");
+
   container.innerHTML = `
-    <div class="table-responsive">
+    <div class="table-responsive d-none d-md-block">
       <table class="table table-hover align-middle mb-0">
         <thead class="table-light"><tr>${thead}</tr></thead>
         <tbody>${tbody}</tbody>
       </table>
-    </div>`;
+    </div>
+    <div class="data-cards d-md-none">${cardsHtml}</div>`;
 };
 
 export const renderErrorState = (container, message) => {

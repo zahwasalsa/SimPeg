@@ -165,7 +165,7 @@ const columns = () => {
             `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" type="button"><i class="bi bi-trash"></i> Hapus</button>`,
           );
         }
-        return buttons.join("");
+        return `<div class="table-actions">${buttons.join("")}</div>`;
       },
     },
   );
@@ -553,7 +553,7 @@ const indicatorColumns = () => {
             `<button class="btn btn-sm btn-outline-danger" data-action="delete-indicator" data-detailid="${row.id}" type="button"><i class="bi bi-trash"></i> Hapus</button>`,
           );
         }
-        return buttons.join("");
+        return `<div class="table-actions">${buttons.join("")}</div>`;
       },
     });
   }

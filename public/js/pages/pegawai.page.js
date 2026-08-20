@@ -92,9 +92,11 @@ const columns = () => {
       key: "actions",
       label: "",
       render: (row) => `
-        <button class="btn btn-sm btn-outline-secondary me-1" data-action="detail" data-id="${row.id}" type="button">Detail</button>
-        ${canManage() ? `<button class="btn btn-sm btn-outline-primary me-1" data-action="edit" data-id="${row.id}" type="button">Edit</button>` : ""}
-        ${canManage() ? `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-name="${escapeHtml(row.namaLengkap)}" type="button">Hapus</button>` : ""}
+        <div class="table-actions">
+          <button class="btn btn-sm btn-outline-secondary" data-action="detail" data-id="${row.id}" type="button">Detail</button>
+          ${canManage() ? `<button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${row.id}" type="button">Edit</button>` : ""}
+          ${canManage() ? `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-name="${escapeHtml(row.namaLengkap)}" type="button">Hapus</button>` : ""}
+        </div>
       `,
     },
   ];

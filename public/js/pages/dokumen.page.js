@@ -125,7 +125,12 @@ const columns = () => {
   }
 
   base.push(
-    { key: "namaDokumen", label: "Nama Dokumen" },
+    {
+      key: "namaDokumen",
+      label: "Nama Dokumen",
+      render: (row) =>
+        `<span class="table-cell-truncate" title="${escapeHtml(row.namaDokumen)}">${escapeHtml(row.namaDokumen)}</span>`,
+    },
     {
       key: "kategoriDokumenId",
       label: "Kategori",
@@ -161,7 +166,7 @@ const columns = () => {
         buttons.push(
           `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-name="${escapeHtml(row.namaDokumen)}" type="button">Hapus</button>`,
         );
-        return buttons.join("");
+        return `<div class="table-actions">${buttons.join("")}</div>`;
       },
     },
   );
@@ -338,8 +343,10 @@ const versiColumns = (activeNomorVersi) => [
     key: "actions",
     label: "",
     render: (row) => `
-      <button class="btn btn-sm btn-outline-primary me-1" data-action="preview-versi" data-versionid="${row.id}" type="button">Preview</button>
-      <button class="btn btn-sm btn-outline-dark" data-action="download-versi" data-versionid="${row.id}" type="button">Unduh</button>
+      <div class="table-actions">
+        <button class="btn btn-sm btn-outline-primary" data-action="preview-versi" data-versionid="${row.id}" type="button">Preview</button>
+        <button class="btn btn-sm btn-outline-dark" data-action="download-versi" data-versionid="${row.id}" type="button">Unduh</button>
+      </div>
     `,
   },
 ];
@@ -587,8 +594,10 @@ const kategoriColumns = () => [
     key: "actions",
     label: "",
     render: (row) => `
-      <button class="btn btn-sm btn-outline-primary me-1" data-action="edit" data-id="${row.id}" type="button">Edit</button>
-      <button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-name="${escapeHtml(row.namaKategori)}" type="button">Hapus</button>
+      <div class="table-actions">
+        <button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${row.id}" type="button">Edit</button>
+        <button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-name="${escapeHtml(row.namaKategori)}" type="button">Hapus</button>
+      </div>
     `,
   },
 ];

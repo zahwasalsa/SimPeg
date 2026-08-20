@@ -94,7 +94,7 @@ const columns = () => {
             `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" type="button">Hapus</button>`,
           );
         }
-        return buttons.join("");
+        return `<div class="table-actions">${buttons.join("")}</div>`;
       },
     },
   );

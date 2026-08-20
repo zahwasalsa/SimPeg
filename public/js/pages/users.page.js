@@ -41,7 +41,12 @@ let currentUser = null;
 const isSelf = (id) => Boolean(currentUser && id === currentUser.id);
 
 const columns = () => [
-  { key: "email", label: "Email" },
+  {
+    key: "email",
+    label: "Email",
+    render: (row) =>
+      `<span class="table-cell-truncate" title="${escapeHtml(row.email)}">${escapeHtml(row.email)}</span>`,
+  },
   { key: "role", label: "Role", render: (row) => escapeHtml(ROLE_LABELS[row.role] || row.role) },
   {
     key: "isActive",
@@ -58,13 +63,15 @@ const columns = () => [
     key: "actions",
     label: "",
     render: (row) => `
-      <button class="btn btn-sm btn-outline-secondary me-1" data-action="detail" data-id="${row.id}" type="button">Detail</button>
-      <button class="btn btn-sm btn-outline-primary me-1" data-action="edit" data-id="${row.id}" type="button">Edit</button>
-      ${
-        isSelf(row.id)
-          ? ""
-          : `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-email="${escapeHtml(row.email)}" type="button">Hapus</button>`
-      }
+      <div class="table-actions">
+        <button class="btn btn-sm btn-outline-secondary" data-action="detail" data-id="${row.id}" type="button">Detail</button>
+        <button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${row.id}" type="button">Edit</button>
+        ${
+          isSelf(row.id)
+            ? ""
+            : `<button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${row.id}" data-email="${escapeHtml(row.email)}" type="button">Hapus</button>`
+        }
+      </div>
     `,
   },
 ];
