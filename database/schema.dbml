@@ -1,0 +1,432 @@
+// SimPeg — Sistem Pengembangan Karier dan Kinerja Pegawai
+// Generated from database/migrations/*.sql (PostgreSQL via Supabase)
+// View interactively at https://dbdiagram.io — paste this file's contents.
+
+Project simpeg {
+  database_type: 'PostgreSQL'
+  note: '''
+    Sistem Aplikasi Terpadu Kepegawaian (SimPeg).
+    Every business table follows the same audit-trail pattern:
+    created_at / updated_at (auto-touched by the shared set_updated_at()
+    trigger) and a nullable deleted_at for soft deletes — repository
+    queries always filter `deleted_at IS NULL`.
+  '''
+}
+
+// ── Enums ─────────────────────────────────────────────────────────────────
+
+enum user_role {
+  admin
+  hrd
+  pegawai
+  pimpinan
+}
+
+enum jenis_kelamin_enum {
+  "Laki-laki"
+  "Perempuan"
+}
+
+enum status_kepegawaian_enum {
+  aktif
+  nonaktif
+  pensiun
+}
+
+enum absensi_status_enum {
+  hadir
+  izin
+  sakit
+  alpha
+  cuti
+}
+
+enum jenis_cuti_enum {
+  cuti_tahunan
+  cuti_sakit
+  cuti_melahirkan
+  cuti_besar
+  cuti_alasan_penting
+}
+
+enum cuti_status_enum {
+  diajukan
+  disetujui
+  ditolak
+  dibatalkan
+}
+
+enum dokumen_status_enum {
+  menunggu_persetujuan
+  disetujui
+  ditolak
+}
+
+enum kpi_status_enum {
+  not_started
+  on_track
+  at_risk
+  achieved
+}
+
+enum roadmap_status_enum {
+  in_progress
+  eligible
+  promoted
+}
+
+// ── Supabase Auth (external, stub only) ─────────────────────────────────────
+
+Table auth.users {
+  id uuid [pk]
+  email varchar
+  created_at timestamptz
+
+  note: '''
+    Managed entirely by Supabase Auth, not by this app's migrations.
+    public.users.id is FK'd to this table (ON DELETE CASCADE) and kept in
+    sync by the on_auth_user_created trigger, which inserts a matching
+    public.users row (role taken from raw_user_meta_data->>'role',
+    defaulting to 'pegawai') whenever a new auth.users row is created.
+    Passwords live here (encrypted_password) — public.users.password_hash
+    is legacy/unused and nullable.
+  '''
+}
+
+// ── Core / identity ──────────────────────────────────────────────────────
+
+Table users {
+  id uuid [pk, ref: > auth.users.id]
+  email varchar(255) [not null, unique]
+  password_hash text [note: 'Legacy/unused — Supabase Auth owns password storage']
+  role user_role [not null, default: 'pegawai']
+  is_active boolean [not null, default: true]
+  last_login timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    email
+    role
+  }
+}
+
+Table divisi {
+  id uuid [pk, default: `gen_random_uuid()`]
+  nama_divisi varchar(150) [not null, unique]
+  deskripsi text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+}
+
+Table jabatan {
+  id uuid [pk, default: `gen_random_uuid()`]
+  nama_jabatan varchar(150) [not null, unique]
+  deskripsi text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+}
+
+Table pegawai {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, unique, ref: > users.id]
+  divisi_id uuid [ref: > divisi.id, note: 'ON DELETE SET NULL']
+  jabatan_id uuid [ref: > jabatan.id, note: 'ON DELETE SET NULL']
+  nip varchar(30) [not null, unique]
+  nama_lengkap varchar(200) [not null]
+  jenis_kelamin jenis_kelamin_enum
+  tempat_lahir varchar(100)
+  tanggal_lahir date
+  alamat text
+  no_telepon varchar(30)
+  tanggal_masuk date
+  status_kepegawaian status_kepegawaian_enum [not null, default: 'aktif']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    user_id
+    divisi_id
+    jabatan_id
+    nip
+  }
+}
+
+// ── Attendance / leave ───────────────────────────────────────────────────
+
+Table absensi {
+  id uuid [pk, default: `gen_random_uuid()`]
+  pegawai_id uuid [not null, ref: > pegawai.id, note: 'ON DELETE CASCADE']
+  tanggal date [not null]
+  jam_masuk time
+  jam_keluar time
+  status absensi_status_enum [not null, default: 'hadir']
+  keterangan text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    pegawai_id
+    tanggal
+    status
+    (pegawai_id, tanggal) [unique, name: 'uq_absensi_pegawai_tanggal']
+  }
+
+  note: 'CHECK: jam_keluar >= jam_masuk (when both set)'
+}
+
+Table cuti {
+  id uuid [pk, default: `gen_random_uuid()`]
+  pegawai_id uuid [not null, ref: > pegawai.id, note: 'ON DELETE CASCADE']
+  jenis_cuti jenis_cuti_enum [not null]
+  tanggal_mulai date [not null]
+  tanggal_selesai date [not null]
+  jumlah_hari integer [note: 'GENERATED ALWAYS AS (tanggal_selesai - tanggal_mulai + 1) STORED']
+  alasan text
+  status cuti_status_enum [not null, default: 'diajukan']
+  disetujui_oleh uuid [ref: > users.id, note: 'ON DELETE SET NULL']
+  tanggal_persetujuan timestamptz
+  catatan_approval text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    pegawai_id
+    status
+  }
+
+  note: 'CHECK: tanggal_selesai >= tanggal_mulai'
+}
+
+// ── Documents ─────────────────────────────────────────────────────────────
+
+Table kategori_dokumen {
+  id uuid [pk, default: `gen_random_uuid()`]
+  nama_kategori varchar(150) [not null, unique]
+  deskripsi text
+  wajib_approval boolean [not null, default: false, note: 'Per-category: does an uploaded dokumen need admin/hrd approval?']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+}
+
+Table dokumen {
+  id uuid [pk, default: `gen_random_uuid()`]
+  pegawai_id uuid [not null, ref: > pegawai.id, note: 'ON DELETE CASCADE']
+  kategori_dokumen_id uuid [ref: > kategori_dokumen.id, note: 'ON DELETE SET NULL']
+  nama_dokumen varchar(200) [not null]
+  nama_file_asli varchar(255) [not null, note: 'Mirrors the active version']
+  file_path text [not null]
+  bucket varchar(100) [not null]
+  mime_type varchar(150) [not null]
+  ukuran_file bigint [not null]
+  diunggah_oleh uuid [ref: > users.id, note: 'ON DELETE SET NULL']
+  versi_aktif integer [not null, default: 1]
+  status dokumen_status_enum [note: 'NULL = kategori is not wajib_approval, no workflow applies']
+  disetujui_oleh uuid [ref: > users.id, note: 'ON DELETE SET NULL']
+  tanggal_persetujuan timestamptz
+  catatan_approval text
+  tanggal_kedaluwarsa date [note: 'Nullable — most categories never expire']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    pegawai_id
+    kategori_dokumen_id
+    tanggal_kedaluwarsa [note: 'Partial index WHERE tanggal_kedaluwarsa IS NOT NULL']
+  }
+}
+
+Table dokumen_version {
+  id uuid [pk, default: `gen_random_uuid()`]
+  dokumen_id uuid [not null, ref: > dokumen.id, note: 'ON DELETE CASCADE']
+  nomor_versi integer [not null]
+  nama_file_asli varchar(255) [not null]
+  file_path text [not null]
+  bucket varchar(100) [not null]
+  mime_type varchar(150) [not null]
+  ukuran_file bigint [not null]
+  diunggah_oleh uuid [ref: > users.id, note: 'ON DELETE SET NULL']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    dokumen_id
+    (dokumen_id, nomor_versi) [unique, name: 'uq_dokumen_version_nomor_versi']
+  }
+
+  note: 'No deleted_at — versions are immutable history, not soft-deletable'
+}
+
+// ── Performance / career ─────────────────────────────────────────────────
+
+Table kpi {
+  id uuid [pk, default: `gen_random_uuid()`]
+  pegawai_id uuid [not null, ref: > pegawai.id, note: 'ON DELETE CASCADE']
+  period varchar(20) [not null]
+  target numeric [not null]
+  achievement numeric [not null, default: 0]
+  percentage decimal(5,2) [not null, default: 0, note: 'Computed by the Service layer, not SQL']
+  status kpi_status_enum [not null, default: 'not_started']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    pegawai_id
+    status
+    period
+    (pegawai_id, period) [unique, name: 'uq_kpi_pegawai_period']
+  }
+}
+
+Table kpi_detail {
+  id uuid [pk, default: `gen_random_uuid()`]
+  kpi_id uuid [not null, ref: > kpi.id, note: 'ON DELETE CASCADE']
+  indicator varchar(200) [not null]
+  target numeric [not null]
+  realization numeric [not null, default: 0]
+  weight numeric [not null, default: 0]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    kpi_id
+  }
+}
+
+Table roadmap_karier {
+  id uuid [pk, default: `gen_random_uuid()`]
+  pegawai_id uuid [not null, ref: > pegawai.id, note: 'ON DELETE CASCADE']
+  jabatan_saat_ini_id uuid [ref: > jabatan.id, note: 'ON DELETE SET NULL']
+  jabatan_target_id uuid [ref: > jabatan.id, note: 'ON DELETE SET NULL']
+  persyaratan text
+  progress decimal(5,2) [not null, default: 0]
+  status roadmap_status_enum [not null, default: 'in_progress']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    pegawai_id
+    status
+    jabatan_target_id
+  }
+}
+
+// ── Research / IP ─────────────────────────────────────────────────────────
+
+Table penelitian {
+  id uuid [pk, default: `gen_random_uuid()`]
+  pegawai_id uuid [not null, ref: > pegawai.id, note: 'ON DELETE CASCADE — pengusul/owner']
+  judul varchar(300) [not null]
+  skema varchar(200)
+  dana numeric
+  tahun integer [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    pegawai_id
+    tahun
+  }
+}
+
+Table anggota_penelitian {
+  id uuid [pk, default: `gen_random_uuid()`]
+  penelitian_id uuid [not null, ref: > penelitian.id, note: 'ON DELETE CASCADE']
+  pegawai_id uuid [not null, ref: > pegawai.id, note: 'ON DELETE CASCADE — additional team member, not the owner']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    penelitian_id
+    pegawai_id
+    (penelitian_id, pegawai_id) [unique, name: 'uq_anggota_penelitian_penelitian_pegawai']
+  }
+
+  note: 'Many-to-many join: penelitian <-> pegawai (team members beyond the owner)'
+}
+
+Table publikasi {
+  id uuid [pk, default: `gen_random_uuid()`]
+  penelitian_id uuid [not null, ref: > penelitian.id, note: 'ON DELETE CASCADE']
+  judul varchar(300) [not null]
+  jurnal varchar(300)
+  terindeks boolean [not null, default: false]
+  tahun integer [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    penelitian_id
+    tahun
+  }
+}
+
+Table hki {
+  id uuid [pk, default: `gen_random_uuid()`]
+  pegawai_id uuid [not null, ref: > pegawai.id, note: 'ON DELETE CASCADE']
+  penelitian_id uuid [ref: > penelitian.id, note: 'ON DELETE SET NULL — optional, not every HKI has a tracked penelitian']
+  judul varchar(300) [not null]
+  jenis varchar(100) [note: 'Free text: Paten / Hak Cipta / Merek / etc.']
+  nomor_pendaftaran varchar(100)
+  tanggal_pendaftaran date
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    pegawai_id
+    penelitian_id
+  }
+}
+
+// ── Certification ─────────────────────────────────────────────────────────
+
+Table jenis_sertifikasi {
+  id uuid [pk, default: `gen_random_uuid()`]
+  nama_jenis varchar(150) [not null, unique]
+  deskripsi text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+}
+
+Table sertifikasi {
+  id uuid [pk, default: `gen_random_uuid()`]
+  pegawai_id uuid [not null, ref: > pegawai.id, note: 'ON DELETE CASCADE']
+  jenis_sertifikasi_id uuid [ref: > jenis_sertifikasi.id, note: 'ON DELETE SET NULL']
+  nama_sertifikat varchar(300) [not null]
+  penerbit varchar(300)
+  nomor_sertifikat varchar(150)
+  tanggal_terbit date
+  tanggal_berakhir date [note: 'Nullable — not every certificate expires']
+  nama_file_asli varchar(255) [not null]
+  file_path text [not null]
+  bucket varchar(100) [not null]
+  mime_type varchar(150) [not null]
+  ukuran_file bigint [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    pegawai_id
+    jenis_sertifikasi_id
+    tanggal_berakhir [note: 'Partial index WHERE tanggal_berakhir IS NOT NULL']
+  }
+
+  note: 'One file per row, no versioning (unlike dokumen/dokumen_version)'
+}
